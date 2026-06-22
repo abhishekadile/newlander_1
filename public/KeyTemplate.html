@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IncuCount — Software License Key</title>
+  <style>
+    /* ── Print setup ───────────────────────────────────────────── */
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .no-print { display: none !important; }
+    }
+
+    /* ── Reset & base ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #e8eef5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+    }
+
+    /* ── Page shell ────────────────────────────────────────────── */
+    .page {
+      width: 794px;          /* A4 at 96dpi */
+      min-height: 1123px;
+      background: #e8eef5;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* ── Logo header ───────────────────────────────────────────── */
+    .logo-area {
+      background: #e8eef5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 0 28px;
+    }
+
+    .logo-arc {
+      width: 180px;
+      margin-bottom: 2px;
+    }
+
+    /* ── Navy banner ───────────────────────────────────────────── */
+    .banner {
+      background: #1a2d5a;
+      color: #ffffff;
+      text-align: center;
+      letter-spacing: 0.35em;
+      font-size: 13.5px;
+      font-weight: 400;
+      padding: 16px 0;
+      text-transform: uppercase;
+    }
+
+    /* ── Card wrapper ──────────────────────────────────────────── */
+    .card-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 52px 60px 40px;
+    }
+
+    .card {
+      background: #ffffff;
+      border-radius: 14px;
+      padding: 48px 52px 52px;
+      width: 100%;
+      box-shadow: 0 2px 18px rgba(26,45,90,0.10);
+    }
+
+    /* ── Card headings ─────────────────────────────────────────── */
+    .card-title {
+      color: #1a2d5a;
+      font-size: 26px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 18px;
+    }
+
+    .card-divider {
+      border: none;
+      border-top: 1.5px solid #c8d4e8;
+      margin: 0 0 22px;
+    }
+
+    .card-subtitle {
+      color: #4a5568;
+      font-size: 14.5px;
+      text-align: center;
+      line-height: 1.65;
+      margin-bottom: 28px;
+    }
+
+    /* ── Product key label ─────────────────────────────────────── */
+    .key-label {
+      color: #2a5ab8;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.28em;
+      text-align: center;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    /* ── Key box ───────────────────────────────────────────────── */
+    .key-box {
+      border: 2px solid #2a5ab8;
+      border-radius: 10px;
+      background: #f0f4fb;
+      padding: 26px 20px;
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .key-value {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a2d5a;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Metadata table ────────────────────────────────────────── */
+    .card-divider-bottom {
+      border: none;
+      border-top: 1.5px solid #c8d4e8;
+      margin: 0 0 28px;
+    }
+
+    .meta-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .meta-table tr td {
+      padding: 8px 0;
+      font-size: 15px;
+      vertical-align: middle;
+    }
+
+    .meta-table .meta-label {
+      color: #4a5568;
+      width: 40%;
+    }
+
+    .meta-table .meta-value {
+      color: #2a5ab8;
+      font-weight: 600;
+    }
+
+    /* ── Footer ────────────────────────────────────────────────── */
+    .footer {
+      background: #1a2d5a;
+      color: #a0aec0;
+      font-size: 11.5px;
+      text-align: center;
+      padding: 18px 20px;
+      line-height: 1.7;
+      margin-top: auto;
+    }
+
+    .footer .footer-top {
+      color: #cbd5e0;
+      margin-bottom: 4px;
+    }
+
+    /* ── Edit toolbar (no-print) ───────────────────────────────── */
+    .toolbar {
+      width: 794px;
+      background: #1a2d5a;
+      color: #ffffff;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 13px;
+      border-radius: 0 0 8px 8px;
+      margin-bottom: 32px;
+    }
+
+    .toolbar label { color: #a0c4ff; font-size: 11px; display: block; margin-bottom: 2px; }
+
+    .toolbar input, .toolbar select {
+      background: #243b6e;
+      border: 1px solid #4a6fa8;
+      color: #ffffff;
+      border-radius: 5px;
+      padding: 5px 10px;
+      font-size: 13px;
+      font-family: inherit;
+      width: 190px;
+    }
+
+    .toolbar input:focus, .toolbar select:focus {
+      outline: 2px solid #5b8dee;
+    }
+
+    .toolbar .field { display: flex; flex-direction: column; }
+
+    .toolbar button {
+      background: #2a5ab8;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      padding: 9px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-left: auto;
+      transition: background 0.15s;
+    }
+    .toolbar button:hover { background: #1e4a9a; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Edit toolbar (hidden when printing) ──────────────────── -->
+  <div class="toolbar no-print">
+    <div class="field">
+      <label>Product Key</label>
+      <input type="text" id="inp-key" value="VY3H-97QK-T1ZP-4MA8" maxlength="19" placeholder="XXXX-XXXX-XXXX-XXXX" />
+    </div>
+    <div class="field">
+      <label>Product Name</label>
+      <input type="text" id="inp-product" value="IncuCount" />
+    </div>
+    <div class="field">
+      <label>Licence Type</label>
+      <input type="text" id="inp-licence" value="Single Device / Perpetual" />
+    </div>
+    <div class="field">
+      <label>Year</label>
+      <input type="text" id="inp-year" value="2026" maxlength="4" style="width:80px;" />
+    </div>
+    <button onclick="updateDoc()">Update &amp; Print</button>
+  </div>
+
+  <!-- ── Page ─────────────────────────────────────────────────── -->
+  <div class="page">
+
+    <!-- Logo -->
+    <div class="logo-area">
+      <!-- SVG recreation of the Newlander Life Sciences logo -->
+      <svg class="logo-arc" viewBox="0 0 260 110" xmlns="http://www.w3.org/2000/svg">
+        <!-- Arc line -->
+        <path d="M 20 52 Q 130 -10 240 52" fill="none" stroke="#1a2d5a" stroke-width="2.5"/>
+        <!-- Circle dot at top of arc -->
+        <circle cx="130" cy="8" r="4.5" fill="#1a2d5a"/>
+        <!-- NEWLANDER text -->
+        <text x="130" y="72" text-anchor="middle"
+              font-family="'Arial Black', Arial, sans-serif"
+              font-size="28" font-weight="900" fill="#1a2d5a" letter-spacing="1.5">
+          N<tspan fill="#2a5ab8">EWLANDE</tspan>R
+        </text>
+        <!-- LIFE SCIENCES subtext -->
+        <text x="130" y="90" text-anchor="middle"
+              font-family="Arial, sans-serif"
+              font-size="10.5" font-weight="400" fill="#4a5568" letter-spacing="3.5">
+          LIFE SCIENCES
+        </text>
+      </svg>
+    </div>
+
+    <!-- Navy banner -->
+    <div class="banner">S O F T W A R E &nbsp; L I C E N S E</div>
+
+    <!-- Card -->
+    <div class="card-wrapper">
+      <div class="card">
+
+        <div class="card-title">Your License Key</div>
+        <hr class="card-divider" />
+
+        <p class="card-subtitle">
+          Use the key below to activate your IncuCount software.<br/>
+          Enter it in the application when prompted on first launch.
+        </p>
+
+        <div class="key-label">P R O D U C T &nbsp; K E Y</div>
+
+        <div class="key-box">
+          <div class="key-value" id="display-key">VY3H-97QK-T1ZP-4MA8</div>
+        </div>
+
+        <hr class="card-divider-bottom" />
+
+        <table class="meta-table">
+          <tr>
+            <td class="meta-label">Product:</td>
+            <td class="meta-value" id="display-product">IncuCount</td>
+          </tr>
+          <tr>
+            <td class="meta-label">License:</td>
+            <td class="meta-value" id="display-licence">Single Device / Perpetual</td>
+          </tr>
+        </table>
+
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-top">Keep this key safe — it is required to activate your software.</div>
+      <div>© <span id="display-year">2026</span> Newlander Life Sciences &nbsp;|&nbsp; IncuCount &nbsp;|&nbsp; Confidential</div>
+    </div>
+
+  </div>
+
+  <script>
+    function updateDoc() {
+      const key     = document.getElementById('inp-key').value.trim().toUpperCase();
+      const product = document.getElementById('inp-product').value.trim();
+      const licence = document.getElementById('inp-licence').value.trim();
+      const year    = document.getElementById('inp-year').value.trim();
+
+      document.getElementById('display-key').textContent     = key;
+      document.getElementById('display-product').textContent = product;
+      document.getElementById('display-licence').textContent = licence;
+      document.getElementById('display-year').textContent    = year;
+
+      // Small delay then print so the DOM has time to update
+      setTimeout(() => window.print(), 150);
+    }
+
+    // Also auto-format key input with dashes as user types
+    document.getElementById('inp-key').addEventListener('input', function() {
+      let v = this.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      let out = '';
+      for (let i = 0; i < v.length && i < 16; i++) {
+        if (i > 0 && i % 4 === 0) out += '-';
+        out += v[i];
+      }
+      this.value = out;
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('key')) {
+        document.getElementById('inp-key').value = urlParams.get('key');
+        // Let's just update the display without forcing print
+        const key     = document.getElementById('inp-key').value.trim().toUpperCase();
+        const product = document.getElementById('inp-product').value.trim();
+        const licence = document.getElementById('inp-licence').value.trim();
+        const year    = document.getElementById('inp-year').value.trim();
+
+        document.getElementById('display-key').textContent     = key;
+        document.getElementById('display-product').textContent = product;
+        document.getElementById('display-licence').textContent = licence;
+        document.getElementById('display-year').textContent    = year;
+      }
+    });
+  </script>
+
+</body>
+</html>

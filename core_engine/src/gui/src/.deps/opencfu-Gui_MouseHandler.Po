@@ -1,0 +1,3 @@
+src/gui/src/opencfu-Gui_MouseHandler.o: src/gui/src/Gui_MouseHandler.cpp \
+ src/gui/headers/Gui_MouseHandler.hpp
+src/gui/headers/Gui_MouseHandler.hpp:

@@ -1,0 +1,11 @@
+node_modules
+.env
+uploads/
+
+# new_system — large binary / generated artifacts
+new_system/data/
+new_system/runs/
+new_system/weights/
+
+# macOS metadata
+.DS_Store

@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IncuCount | Colony Profiles Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#10b981',
+                        dark: '#0f172a',
+                        darker: '#020617',
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+        }
+        #appShell { height: 100dvh; }
+        #appSidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 40;
+            height: 100dvh;
+            width: 16rem;
+            transition: width 0.22s ease, transform 0.22s ease;
+        }
+        #appMain {
+            margin-left: 0;
+            height: 100dvh;
+            transition: margin-left 0.22s ease;
+        }
+        #appShell .sidebar-label,
+        #appShell .sidebar-brand-text { transition: opacity 0.15s ease; }
+        #appShell.sidebar-collapsed:not(.sidebar-drawer-open) .sidebar-label,
+        #appShell.sidebar-collapsed:not(.sidebar-drawer-open) .sidebar-brand-text {
+            display: none;
+        }
+        #appShell.sidebar-collapsed #appSidebar { width: 4.5rem; }
+        #appShell.sidebar-collapsed .nav-btn,
+        #appShell.sidebar-collapsed .nav-footer-link,
+        #appShell.sidebar-collapsed .sidebar-footer-btn {
+            justify-content: center;
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+            gap: 0;
+        }
+        #appShell.sidebar-collapsed .sidebar-header-inner {
+            justify-content: center;
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }
+        #appShell.sidebar-collapsed #sidebarCollapseBtn { margin: 0 auto; }
+        @media (min-width: 768px) {
+            #appShell.sidebar-expanded #appMain { margin-left: 16rem; }
+            #appShell.sidebar-collapsed #appMain { margin-left: 4.5rem; }
+            #appShell.sidebar-hidden #appMain { margin-left: 0; }
+            #appShell.sidebar-hidden #appSidebar { transform: translateX(-100%); }
+            #appShell.sidebar-hidden.sidebar-drawer-open #appSidebar {
+                transform: translateX(0);
+                width: 16rem;
+                box-shadow: 4px 0 24px rgba(0, 0, 0, 0.45);
+            }
+            #appShell.sidebar-hidden.sidebar-drawer-open .sidebar-label,
+            #appShell.sidebar-hidden.sidebar-drawer-open .sidebar-brand-text {
+                opacity: 1;
+                width: auto;
+                display: block;
+            }
+            #appShell.sidebar-hidden.sidebar-drawer-open .nav-btn,
+            #appShell.sidebar-hidden.sidebar-drawer-open .nav-footer-link,
+            #appShell.sidebar-hidden.sidebar-drawer-open .sidebar-footer-btn {
+                justify-content: flex-start;
+                gap: 0.75rem;
+            }
+        }
+        #sidebarBackdrop { transition: opacity 0.2s ease; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-darker text-slate-100 min-h-screen antialiased">
+
+    <!-- Auth -->
+    <div id="authOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-darker/95 backdrop-blur-md">
+        <div class="glass p-8 rounded-2xl shadow-2xl w-full max-w-md text-center">
+            <div class="w-14 h-14 rounded-xl bg-secondary/20 text-secondary flex items-center justify-center mx-auto mb-4">
+                <i class="fa-solid fa-flask text-xl"></i>
+            </div>
+            <h2 class="text-xl font-bold text-white">Admin sign in</h2>
+            <p class="text-sm text-slate-400 mt-1 mb-6">Enter your admin secret to review colony profiles.</p>
+            <form id="authForm" class="space-y-4 text-left">
+                <input type="password" id="adminSecretInput" placeholder="Admin secret" required
+                    class="w-full bg-dark border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary">
+                <button type="submit" class="w-full bg-primary hover:bg-blue-600 text-white font-medium py-3 rounded-lg transition-colors">
+                    Continue
+                </button>
+            </form>
+            <p id="authError" class="mt-4 text-red-400 text-sm hidden"></p>
+        </div>
+    </div>
+
+    <!-- App shell -->
+    <div id="appShell" class="hidden overflow-hidden sidebar-expanded">
+        <div id="sidebarBackdrop" class="hidden fixed inset-0 z-30 bg-black/50 opacity-0 pointer-events-none" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
+
+        <aside id="appSidebar" class="hidden md:flex flex-col glass border-r border-slate-800">
+            <div class="p-3 border-b border-slate-800 shrink-0 space-y-3">
+                <div class="sidebar-header-inner flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-secondary to-emerald-700 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-flask text-white text-sm"></i>
+                    </div>
+                    <div class="sidebar-brand-text min-w-0 flex-1">
+                        <p class="font-bold text-white leading-tight truncate">IncuCount</p>
+                        <p class="text-[10px] uppercase tracking-wider text-slate-500">Profiles Admin</p>
+                    </div>
+                </div>
+                <button type="button" id="sidebarCollapseBtn" onclick="toggleSidebar()" class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 border border-slate-800 transition-colors" title="Collapse sidebar">
+                    <i id="sidebarCollapseIcon" class="fa-solid fa-angles-left"></i>
+                    <span class="sidebar-label">Collapse</span>
+                </button>
+            </div>
+            <nav class="p-3 space-y-1 flex-1 overflow-y-auto">
+                <button type="button" data-panel="dashboard" title="Profile review" class="nav-btn w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium bg-secondary/15 text-secondary border border-secondary/20">
+                    <i class="fa-solid fa-table-list w-4 shrink-0 text-center"></i>
+                    <span class="sidebar-label">Profile review</span>
+                </button>
+                <a href="/admin.html" title="License keys" class="nav-footer-link flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors">
+                    <i class="fa-solid fa-key w-4 shrink-0"></i>
+                    <span class="sidebar-label">License keys</span>
+                </a>
+            </nav>
+            <div class="p-3 border-t border-slate-800 space-y-1 shrink-0">
+                <button type="button" onclick="logout()" title="Logout" class="sidebar-footer-btn flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors text-left">
+                    <i class="fa-solid fa-right-from-bracket w-4 shrink-0"></i>
+                    <span class="sidebar-label">Logout</span>
+                </button>
+            </div>
+        </aside>
+
+        <nav id="mobileNav" class="md:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t border-slate-800 px-2 py-2">
+            <div class="grid grid-cols-3 gap-1 max-w-lg mx-auto">
+                <button type="button" data-panel="dashboard" class="mobile-nav-btn flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-[10px] font-medium text-secondary bg-secondary/10">
+                    <i class="fa-solid fa-table-list text-base"></i>
+                    <span>Profiles</span>
+                </button>
+                <a href="/admin.html" class="flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-[10px] font-medium text-slate-500 hover:text-white">
+                    <i class="fa-solid fa-key text-base"></i>
+                    <span>Licenses</span>
+                </a>
+                <button type="button" onclick="logout()" class="flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-[10px] font-medium text-slate-500 hover:text-white">
+                    <i class="fa-solid fa-right-from-bracket text-base"></i>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </nav>
+
+        <div id="appMain" class="flex flex-col min-w-0 overflow-hidden pb-[4.5rem] md:pb-0">
+            <header class="glass border-b border-slate-800 px-4 md:px-8 py-4 flex items-center justify-between gap-3 shrink-0 z-20">
+                <div class="flex items-center gap-3 min-w-0 flex-1">
+                    <button type="button" id="sidebarOpenBtn" onclick="openSidebarDrawer()" class="hidden md:inline-flex shrink-0 p-2.5 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:border-slate-600 transition-colors" title="Open menu">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <div class="min-w-0">
+                        <h1 id="pageTitle" class="text-lg md:text-xl font-bold text-white truncate">Colony profiles</h1>
+                        <p class="text-xs text-slate-500 mt-0.5 hidden sm:block">Approve user submissions for global sync</p>
+                    </div>
+                </div>
+                <button type="button" onclick="fetchProfiles()" class="shrink-0 p-2.5 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:border-slate-600 transition-colors" title="Refresh">
+                    <i id="refreshIcon" class="fa-solid fa-rotate-right"></i>
+                </button>
+            </header>
+
+            <main class="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-8">
+                <section id="panelDashboard" class="space-y-6 max-w-[1400px] mx-auto">
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                        <div class="glass rounded-xl p-4 md:p-5">
+                            <p class="text-xs uppercase tracking-wide text-slate-500 font-medium">Total profiles</p>
+                            <p id="statTotal" class="text-2xl md:text-3xl font-bold text-white mt-1">—</p>
+                        </div>
+                        <div class="glass rounded-xl p-4 md:p-5">
+                            <p class="text-xs uppercase tracking-wide text-slate-500 font-medium">Pending review</p>
+                            <p id="statPending" class="text-2xl md:text-3xl font-bold text-amber-400 mt-1">—</p>
+                        </div>
+                        <div class="glass rounded-xl p-4 md:p-5">
+                            <p class="text-xs uppercase tracking-wide text-slate-500 font-medium">Approved</p>
+                            <p id="statApproved" class="text-2xl md:text-3xl font-bold text-emerald-400 mt-1">—</p>
+                        </div>
+                        <div class="glass rounded-xl p-4 md:p-5">
+                            <p class="text-xs uppercase tracking-wide text-slate-500 font-medium">Lab catalog</p>
+                            <p id="statLab" class="text-2xl md:text-3xl font-bold text-blue-400 mt-1">—</p>
+                        </div>
+                    </div>
+
+                    <div class="glass rounded-xl p-4 border border-amber-500/20 bg-amber-500/5 text-sm text-slate-300">
+                        <p class="font-medium text-amber-300 mb-1"><i class="fa-solid fa-circle-info mr-1.5"></i>How approval works</p>
+                        <p>Users create sample types locally (offline-first). When online, profiles are submitted here with <span class="font-mono text-xs bg-slate-800 px-1 rounded">validated: false</span>. Approve a profile to make it visible to all users on their next sync. Revoke approval to remove it from the shared catalog.</p>
+                    </div>
+
+                    <div class="glass rounded-xl overflow-hidden flex flex-col min-h-[420px]">
+                        <div class="p-4 md:p-6 border-b border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                            <h2 class="font-semibold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-flask text-secondary"></i> All colony profiles
+                            </h2>
+                            <div class="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+                                <div class="relative flex-1 sm:min-w-[200px]">
+                                    <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+                                    <input type="text" id="searchInput" placeholder="Search name, description…"
+                                        class="w-full bg-dark border border-slate-700 text-sm rounded-lg pl-9 pr-3 py-2 text-white focus:outline-none focus:border-primary">
+                                </div>
+                                <select id="filterStatus" class="bg-dark border border-slate-700 text-sm rounded-lg px-3 py-2 text-white focus:outline-none focus:border-primary">
+                                    <option value="all">All statuses</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="approved">Approved</option>
+                                </select>
+                                <select id="filterSource" class="bg-dark border border-slate-700 text-sm rounded-lg px-3 py-2 text-white focus:outline-none focus:border-primary">
+                                    <option value="all">All sources</option>
+                                    <option value="user">User submitted</option>
+                                    <option value="lab">Lab catalog</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto flex-1">
+                            <table class="w-full text-left min-w-[900px]">
+                                <thead class="bg-slate-900/80 text-[11px] uppercase tracking-wider text-slate-500">
+                                    <tr>
+                                        <th class="px-4 md:px-6 py-3 font-medium">Profile</th>
+                                        <th class="px-4 md:px-6 py-3 font-medium">Source</th>
+                                        <th class="px-4 md:px-6 py-3 font-medium">Status</th>
+                                        <th class="px-4 md:px-6 py-3 font-medium">Owner</th>
+                                        <th class="px-4 md:px-6 py-3 font-medium">Submitted</th>
+                                        <th class="px-4 md:px-6 py-3 font-medium text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="profileTableBody" class="text-sm divide-y divide-slate-800/80"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- Detail drawer -->
+    <div id="detailOverlay" class="fixed inset-0 z-40 hidden">
+        <div class="absolute inset-0 bg-black/60" onclick="closeDetail()"></div>
+        <aside class="absolute right-0 top-0 h-full w-full max-w-lg glass border-l border-slate-800 flex flex-col shadow-2xl">
+            <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+                <h3 class="font-semibold text-white">Profile details</h3>
+                <button type="button" onclick="closeDetail()" class="text-slate-400 hover:text-white p-1"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="detailContent" class="flex-1 overflow-y-auto p-5 space-y-4 text-sm"></div>
+            <div id="detailActions" class="p-5 border-t border-slate-800 flex flex-wrap gap-2"></div>
+        </aside>
+    </div>
+
+    <!-- Delete confirm -->
+    <div id="deleteModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/70">
+        <div class="glass rounded-xl p-6 max-w-md w-full">
+            <h3 class="text-lg font-semibold text-white">Delete profile?</h3>
+            <p class="text-slate-400 text-sm mt-2">This permanently removes <span id="deleteProfileLabel" class="font-medium text-white"></span> from the central catalog. Local copies on user devices are not affected.</p>
+            <div class="mt-6 flex gap-3 justify-end">
+                <button type="button" onclick="closeDeleteModal()" class="px-4 py-2 rounded-lg border border-slate-600 text-slate-300 hover:text-white text-sm">Cancel</button>
+                <button type="button" id="confirmDeleteBtn" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-6 right-6 z-50 hidden px-4 py-3 rounded-lg glass border border-slate-700 text-sm text-white shadow-xl max-w-sm"></div>
+
+    <script>
+        let adminSecret = '';
+        let allProfiles = [];
+        let selectedProfileId = null;
+        let pendingDeleteId = null;
+
+        const authOverlay = document.getElementById('authOverlay');
+        const appShell = document.getElementById('appShell');
+        const authForm = document.getElementById('authForm');
+        const authError = document.getElementById('authError');
+        const profileTableBody = document.getElementById('profileTableBody');
+
+        const storedSecret = sessionStorage.getItem('incucount_admin_secret');
+        if (storedSecret) {
+            adminSecret = storedSecret;
+            verifyAndLoad();
+        }
+
+        authForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            adminSecret = document.getElementById('adminSecretInput').value.trim();
+            verifyAndLoad();
+        });
+
+        ['searchInput', 'filterStatus', 'filterSource'].forEach((id) => {
+            document.getElementById(id).addEventListener('input', renderDashboard);
+            document.getElementById(id).addEventListener('change', renderDashboard);
+        });
+
+        document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDelete);
+
+        const SIDEBAR_STORAGE_KEY = 'incucount_sidebar_state';
+        const tabletMq = window.matchMedia('(max-width: 1023px)');
+
+        function isTabletViewport() { return tabletMq.matches; }
+
+        function getSidebarState() {
+            const shell = document.getElementById('appShell');
+            if (shell.classList.contains('sidebar-hidden')) return 'hidden';
+            if (shell.classList.contains('sidebar-collapsed')) return 'collapsed';
+            return 'expanded';
+        }
+
+        function updateSidebarChrome() {
+            const shell = document.getElementById('appShell');
+            const state = getSidebarState();
+            const openBtn = document.getElementById('sidebarOpenBtn');
+            const collapseBtn = document.getElementById('sidebarCollapseBtn');
+            const collapseIcon = document.getElementById('sidebarCollapseIcon');
+            const collapseLabel = collapseBtn?.querySelector('.sidebar-label');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            const drawerOpen = shell.classList.contains('sidebar-drawer-open');
+            const showMenuBtn = state === 'hidden';
+            openBtn.classList.toggle('hidden', !showMenuBtn);
+            openBtn.classList.toggle('inline-flex', showMenuBtn);
+            if (state === 'hidden' && !drawerOpen) collapseBtn.classList.add('hidden');
+            else collapseBtn.classList.remove('hidden');
+            if (state === 'expanded' || drawerOpen) {
+                collapseIcon.className = 'fa-solid fa-angles-left';
+                if (collapseLabel) collapseLabel.textContent = 'Collapse';
+                collapseBtn.title = 'Collapse sidebar';
+            } else {
+                collapseIcon.className = 'fa-solid fa-angles-right';
+                if (collapseLabel) collapseLabel.textContent = 'Expand';
+                collapseBtn.title = 'Expand sidebar';
+            }
+            const showBackdrop = drawerOpen && state === 'hidden';
+            backdrop.classList.toggle('hidden', !showBackdrop);
+            backdrop.classList.toggle('opacity-0', !showBackdrop);
+            backdrop.classList.toggle('pointer-events-none', !showBackdrop);
+        }
+
+        function applySidebarState(state, persist = true) {
+            const shell = document.getElementById('appShell');
+            shell.classList.remove('sidebar-expanded', 'sidebar-collapsed', 'sidebar-hidden', 'sidebar-drawer-open');
+            shell.classList.add('sidebar-' + state);
+            if (persist) sessionStorage.setItem(SIDEBAR_STORAGE_KEY, state);
+            updateSidebarChrome();
+        }
+
+        function initSidebar() {
+            const saved = sessionStorage.getItem(SIDEBAR_STORAGE_KEY);
+            const valid = ['expanded', 'collapsed', 'hidden'];
+            let state = valid.includes(saved) ? saved : (isTabletViewport() ? 'collapsed' : 'expanded');
+            if (!isTabletViewport() && state === 'hidden') state = 'collapsed';
+            applySidebarState(state, false);
+        }
+
+        function closeSidebarDrawer() {
+            document.getElementById('appShell').classList.remove('sidebar-drawer-open');
+            updateSidebarChrome();
+        }
+
+        function openSidebarDrawer() {
+            const shell = document.getElementById('appShell');
+            if (getSidebarState() === 'hidden') shell.classList.add('sidebar-drawer-open');
+            else applySidebarState('expanded');
+            updateSidebarChrome();
+        }
+
+        function toggleSidebar() {
+            const shell = document.getElementById('appShell');
+            if (shell.classList.contains('sidebar-drawer-open')) { closeSidebarDrawer(); return; }
+            const state = getSidebarState();
+            if (isTabletViewport()) {
+                if (state === 'expanded') applySidebarState('collapsed');
+                else if (state === 'collapsed') applySidebarState('hidden');
+                else applySidebarState('expanded');
+            } else {
+                applySidebarState(state === 'expanded' ? 'collapsed' : 'expanded');
+            }
+        }
+
+        tabletMq.addEventListener('change', () => {
+            if (!isTabletViewport() && getSidebarState() === 'hidden') applySidebarState('collapsed');
+            updateSidebarChrome();
+        });
+
+        function logout() {
+            sessionStorage.removeItem('incucount_admin_secret');
+            adminSecret = '';
+            appShell.classList.add('hidden');
+            authOverlay.classList.remove('hidden');
+            authError.classList.add('hidden');
+        }
+
+        async function verifyAndLoad() {
+            try {
+                const res = await fetch(`/api/colony-profiles/admin/list?adminSecret=${encodeURIComponent(adminSecret)}`);
+                const data = await res.json();
+                if (!data.success) {
+                    logout();
+                    authError.textContent = data.message || 'Invalid secret.';
+                    authError.classList.remove('hidden');
+                    return;
+                }
+                sessionStorage.setItem('incucount_admin_secret', adminSecret);
+                authOverlay.classList.add('hidden');
+                appShell.classList.remove('hidden');
+                initSidebar();
+                allProfiles = data.profiles;
+                renderDashboard();
+            } catch {
+                authError.textContent = 'Could not connect to server.';
+                authError.classList.remove('hidden');
+            }
+        }
+
+        async function fetchProfiles() {
+            const icon = document.getElementById('refreshIcon');
+            icon.classList.add('fa-spin');
+            try {
+                const res = await fetch(`/api/colony-profiles/admin/list?adminSecret=${encodeURIComponent(adminSecret)}`);
+                const data = await res.json();
+                if (data.success) {
+                    allProfiles = data.profiles;
+                    renderDashboard();
+                    if (selectedProfileId) openDetail(selectedProfileId);
+                } else if (res.status === 403) logout();
+            } finally {
+                setTimeout(() => icon.classList.remove('fa-spin'), 400);
+            }
+        }
+
+        function escapeHtml(str) {
+            if (str == null) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function formatDate(val) {
+            if (!val) return '—';
+            return new Date(val).toLocaleString(undefined, {
+                year: 'numeric', month: 'short', day: 'numeric',
+                hour: '2-digit', minute: '2-digit',
+            });
+        }
+
+        function isApproved(p) { return p.validated === true; }
+        function isLab(p) { return p.source === 'lab'; }
+        function isPending(p) { return !isApproved(p) && p.source === 'user'; }
+
+        function statusBadge(p) {
+            if (isApproved(p)) {
+                const label = isLab(p) ? 'APPROVED · LAB' : 'APPROVED';
+                const cls = 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10';
+                return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border whitespace-nowrap ${cls}">${label}</span>`;
+            }
+            return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border whitespace-nowrap text-amber-400 border-amber-500/30 bg-amber-500/10">PENDING</span>`;
+        }
+
+        function sourceBadge(p) {
+            const isLabSource = isLab(p);
+            const cls = isLabSource
+                ? 'text-blue-400 bg-blue-500/10 border-blue-500/20'
+                : 'text-purple-400 bg-purple-500/10 border-purple-500/20';
+            return `<span class="capitalize px-2 py-0.5 rounded text-xs border ${cls}">${isLabSource ? 'Lab' : 'User'}</span>`;
+        }
+
+        function updateStats() {
+            const total = allProfiles.length;
+            const pending = allProfiles.filter(isPending).length;
+            const approved = allProfiles.filter(isApproved).length;
+            const lab = allProfiles.filter(isLab).length;
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statPending').textContent = pending;
+            document.getElementById('statApproved').textContent = approved;
+            document.getElementById('statLab').textContent = lab;
+        }
+
+        function getFilteredProfiles() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const statusFilter = document.getElementById('filterStatus').value;
+            const sourceFilter = document.getElementById('filterSource').value;
+
+            return allProfiles.filter((p) => {
+                const desc = p.description || '';
+                const matchSearch =
+                    p.name.toLowerCase().includes(search) ||
+                    desc.toLowerCase().includes(search) ||
+                    (p.icon || '').toLowerCase().includes(search);
+                if (!matchSearch) return false;
+                if (statusFilter === 'pending' && !isPending(p)) return false;
+                if (statusFilter === 'approved' && !isApproved(p)) return false;
+                if (sourceFilter === 'user' && isLab(p)) return false;
+                if (sourceFilter === 'lab' && !isLab(p)) return false;
+                return true;
+            });
+        }
+
+        function renderDashboard() {
+            updateStats();
+            const filtered = getFilteredProfiles();
+
+            if (filtered.length === 0) {
+                profileTableBody.innerHTML = `
+                    <tr><td colspan="6" class="px-6 py-16 text-center text-slate-500">
+                        <i class="fa-solid fa-inbox text-3xl mb-3 opacity-40 block"></i>
+                        No profiles match your filters.
+                    </td></tr>`;
+                return;
+            }
+
+            profileTableBody.innerHTML = filtered.map((p) => {
+                const ownerLabel = p.user ? escapeHtml(String(p.user)) : 'Global';
+                const approveBtn = !isApproved(p)
+                    ? `<button type="button" data-id="${escapeHtml(p._id)}" data-action="approve" class="action-btn text-emerald-400 hover:text-emerald-300 px-2 py-1" title="Approve for all users"><i class="fa-solid fa-circle-check"></i></button>`
+                    : `<button type="button" data-id="${escapeHtml(p._id)}" data-action="revoke" class="action-btn text-amber-400 hover:text-amber-300 px-2 py-1" title="Revoke approval"><i class="fa-solid fa-circle-xmark"></i></button>`;
+
+                return `
+                    <tr class="hover:bg-slate-800/40 transition-colors">
+                        <td class="px-4 md:px-6 py-3.5">
+                            <p class="font-medium text-white">${escapeHtml(p.name)}</p>
+                            ${p.description ? `<p class="text-xs text-slate-500 mt-0.5 line-clamp-1">${escapeHtml(p.description)}</p>` : ''}
+                        </td>
+                        <td class="px-4 md:px-6 py-3.5">${sourceBadge(p)}</td>
+                        <td class="px-4 md:px-6 py-3.5">${statusBadge(p)}</td>
+                        <td class="px-4 md:px-6 py-3.5 text-slate-400 text-xs font-mono truncate max-w-[120px]" title="${ownerLabel}">${ownerLabel}</td>
+                        <td class="px-4 md:px-6 py-3.5 text-slate-400 text-xs whitespace-nowrap">${formatDate(p.createdAt)}</td>
+                        <td class="px-4 md:px-6 py-3.5 text-right whitespace-nowrap">
+                            ${approveBtn}
+                            <button type="button" data-id="${escapeHtml(p._id)}" data-action="view" class="action-btn text-primary hover:text-blue-300 px-2 py-1" title="View details">
+                                <i class="fa-solid fa-circle-info"></i>
+                            </button>
+                            <button type="button" data-id="${escapeHtml(p._id)}" data-action="delete" class="action-btn text-red-400/80 hover:text-red-400 px-2 py-1" title="Delete">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>`;
+            }).join('');
+
+            profileTableBody.querySelectorAll('.action-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const id = btn.dataset.id;
+                    const action = btn.dataset.action;
+                    if (action === 'view') openDetail(id);
+                    else if (action === 'approve') setValidation(id, true);
+                    else if (action === 'revoke') setValidation(id, false);
+                    else if (action === 'delete') promptDelete(id);
+                });
+            });
+        }
+
+        function detailRow(label, value, mono = false) {
+            const valClass = mono ? 'font-mono text-xs break-all text-slate-200' : 'text-slate-200';
+            return `
+                <div class="grid grid-cols-[120px_1fr] gap-3 py-2 border-b border-slate-800/80">
+                    <span class="text-slate-500 text-xs uppercase tracking-wide">${escapeHtml(label)}</span>
+                    <span class="${valClass}">${value}</span>
+                </div>`;
+        }
+
+        function openDetail(id) {
+            const p = allProfiles.find((x) => x._id === id);
+            if (!p) return;
+            selectedProfileId = id;
+
+            const detection = p.params?.detection || {
+                threshold_type: p.threshold_type,
+                threshold_value: p.threshold_value,
+                min_radius: p.min_radius,
+                max_radius: p.max_radius,
+                enable_color_grouping: p.enable_color_grouping,
+                coarseness: p.coarseness,
+                neighbours: p.neighbours,
+            };
+
+            const paramsBlock = `<pre class="font-mono text-xs text-slate-300 bg-dark p-3 rounded-lg overflow-x-auto border border-slate-800 max-h-48">${escapeHtml(JSON.stringify(p.params, null, 2))}</pre>`;
+
+            document.getElementById('detailContent').innerHTML = `
+                ${detailRow('Name', escapeHtml(p.name))}
+                ${detailRow('Description', escapeHtml(p.description || '—'))}
+                ${detailRow('Status', statusBadge(p))}
+                ${detailRow('Source', sourceBadge(p))}
+                ${detailRow('Mongo ID', escapeHtml(p._id), true)}
+                ${detailRow('Owner user ID', p.user ? escapeHtml(String(p.user)) : 'Global (no user)', true)}
+                ${detailRow('Created', formatDate(p.createdAt))}
+                ${detailRow('Updated', formatDate(p.updatedAt))}
+                <div class="pt-2">
+                    <p class="text-xs uppercase tracking-wide text-slate-500 mb-2">Detection params</p>
+                    <pre class="font-mono text-xs text-slate-300 bg-dark p-3 rounded-lg overflow-x-auto border border-slate-800">${escapeHtml(JSON.stringify(detection, null, 2))}</pre>
+                </div>
+                <div class="pt-2">
+                    <p class="text-xs uppercase tracking-wide text-slate-500 mb-2">Full preset (params)</p>
+                    ${paramsBlock}
+                </div>`;
+
+            const actions = document.getElementById('detailActions');
+            if (!isApproved(p)) {
+                actions.innerHTML = `
+                    <button type="button" onclick="setValidation('${escapeHtml(p._id)}', true)" class="flex-1 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium">
+                        <i class="fa-solid fa-circle-check mr-1"></i> Approve for all users
+                    </button>
+                    <button type="button" onclick="promptDelete('${escapeHtml(p._id)}')" class="px-4 py-2.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 text-sm">
+                        <i class="fa-solid fa-trash mr-1"></i> Delete
+                    </button>`;
+            } else {
+                actions.innerHTML = `
+                    <button type="button" onclick="setValidation('${escapeHtml(p._id)}', false)" class="flex-1 px-4 py-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 text-sm font-medium">
+                        <i class="fa-solid fa-circle-xmark mr-1"></i> Revoke approval
+                    </button>
+                    <button type="button" onclick="promptDelete('${escapeHtml(p._id)}')" class="px-4 py-2.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 text-sm">
+                        <i class="fa-solid fa-trash mr-1"></i> Delete
+                    </button>`;
+            }
+
+            document.getElementById('detailOverlay').classList.remove('hidden');
+        }
+
+        function closeDetail() {
+            document.getElementById('detailOverlay').classList.add('hidden');
+            selectedProfileId = null;
+        }
+
+        async function setValidation(id, validated) {
+            try {
+                const res = await fetch(`/api/colony-profiles/admin/${encodeURIComponent(id)}/validation`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ adminSecret, validated }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(validated ? 'Profile approved — will sync to all users.' : 'Approval revoked.');
+                    await fetchProfiles();
+                    if (selectedProfileId === id) openDetail(id);
+                } else {
+                    showToast(data.message || 'Update failed.', true);
+                    if (res.status === 403) logout();
+                }
+            } catch {
+                showToast('Network error.', true);
+            }
+        }
+
+        function promptDelete(id) {
+            const p = allProfiles.find((x) => x._id === id);
+            pendingDeleteId = id;
+            document.getElementById('deleteProfileLabel').textContent = p ? `"${p.name}"` : id;
+            const modal = document.getElementById('deleteModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeDeleteModal() {
+            pendingDeleteId = null;
+            const modal = document.getElementById('deleteModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        async function confirmDelete() {
+            if (!pendingDeleteId) return;
+            const id = pendingDeleteId;
+            document.getElementById('confirmDeleteBtn').disabled = true;
+            try {
+                const res = await fetch(
+                    `/api/colony-profiles/admin/${encodeURIComponent(id)}?adminSecret=${encodeURIComponent(adminSecret)}`,
+                    { method: 'DELETE' }
+                );
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Profile deleted from central catalog.');
+                    closeDeleteModal();
+                    closeDetail();
+                    await fetchProfiles();
+                } else {
+                    showToast(data.message || 'Delete failed.', true);
+                    if (res.status === 403) logout();
+                }
+            } catch {
+                showToast('Network error.', true);
+            } finally {
+                document.getElementById('confirmDeleteBtn').disabled = false;
+            }
+        }
+
+        function showToast(msg, isError = false) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = `fixed bottom-20 md:bottom-6 right-4 md:right-6 z-[60] px-4 py-3 rounded-lg glass border text-sm shadow-xl max-w-sm ${isError ? 'border-red-500/40 text-red-300' : 'border-slate-700 text-white'}`;
+            t.classList.remove('hidden');
+            clearTimeout(showToast._timer);
+            showToast._timer = setTimeout(() => t.classList.add('hidden'), 2800);
+        }
+    </script>
+</body>
+</html>

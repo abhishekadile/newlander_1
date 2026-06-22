@@ -1,0 +1,1478 @@
+{% if customer %}
+
+<style>
+    *,
+    *::before,
+    *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    .cc-app-container {
+        width: 100%;
+        background: #f5f7fa;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: #1e293b;
+    }
+
+    .main-layout {
+        display: grid;
+        grid-template-columns: 100px 1fr 280px;
+        gap: 0;
+        height: 600px;
+        max-height: 600px;
+        background: #ffffff;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+        border: 1px solid #e5e7eb;
+    }
+
+    /* LEFT: Samples Sidebar */
+    .samples-sidebar {
+        background: #f8fafc;
+        border-right: 1px solid #e5e7eb;
+        display: flex;
+        flex-direction: column;
+        padding: 12px 10px;
+        height: 100%;
+        overflow: hidden;
+    }
+
+    .sidebar-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-bottom: 10px;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #e5e7eb;
+        flex-shrink: 0;
+    }
+
+    .sidebar-logo {
+        width: 28px;
+        height: 28px;
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .sidebar-logo svg {
+        width: 16px;
+        height: 16px;
+        color: white;
+    }
+
+    .sidebar-title {
+        color: #374151;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+    }
+
+    .samples-scroll {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        flex: 1;
+        padding-right: 4px;
+        min-height: 0;
+    }
+
+    .samples-scroll::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    .samples-scroll::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .samples-scroll::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 2px;
+    }
+
+    .sample-thumb {
+        width: 100%;
+        height: 60px;
+        min-height: 60px;
+        object-fit: cover;
+        border-radius: 8px;
+        cursor: pointer;
+        border: 2px solid #e2e8f0;
+        background-color: #f1f5f9;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    .sample-thumb:hover {
+        border-color: #93c5fd;
+        transform: scale(1.03);
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+    }
+
+    .sample-thumb.active {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+    }
+
+    /* CENTER: Image Viewer */
+    .viewer-section {
+        display: flex;
+        flex-direction: column;
+        background: #f1f5f9;
+        position: relative;
+    }
+
+    .viewer-frame {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #1e293b;
+    }
+
+    #zoomViewport {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        cursor: crosshair;
+        position: relative;
+        touch-action: none;
+    }
+
+    #resultContainer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        transform-origin: 0 0;
+    }
+
+    #displayImage {
+        display: block;
+        pointer-events: none;
+        max-width: none;
+    }
+
+    #dishCircleCanvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+        z-index: 5;
+    }
+
+    #viewerStatus {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #fff;
+        font-weight: 600;
+        font-size: 13px;
+        pointer-events: none;
+        z-index: 20;
+        background: rgba(30, 41, 59, 0.9);
+        padding: 10px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(4px);
+    }
+
+    .viewer-toolbar {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 16px;
+        background: #fff;
+        border-top: 1px solid #e5e7eb;
+        flex-shrink: 0;
+    }
+
+    .toolbar-group {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 4px;
+        background: #e2e8f0;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+    }
+
+    .icon-btn {
+        width: 32px;
+        height: 32px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        background: #334155;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #f8fafc;
+        transition: all 0.15s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .icon-btn:hover {
+        background: #475569;
+        color: #fff;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+    }
+
+    .icon-btn svg {
+        width: 18px !important;
+        height: 18px !important;
+        stroke: #ffffff !important;
+        stroke-width: 2px !important;
+        fill: none !important;
+        display: block !important;
+        min-width: 18px !important;
+        /* Prevent squishing */
+    }
+
+    /* Force all SVG child elements to inherit or set visibility */
+    .icon-btn svg path,
+    .icon-btn svg circle,
+    .icon-btn svg line,
+    .icon-btn svg polyline,
+    .icon-btn svg rect {
+        stroke: #ffffff !important;
+        stroke-width: 2px !important;
+        fill: none !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        vector-effect: non-scaling-stroke;
+    }
+
+    .overlay-toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: #fff;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+        color: #475569;
+        border: 1px solid #e2e8f0;
+    }
+
+    .mini-toggle {
+        position: relative;
+        width: 40px;
+        height: 22px;
+    }
+
+    .mini-toggle input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .mini-toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        inset: 0;
+        background: #cbd5e1;
+        border-radius: 22px;
+        transition: all 0.3s ease;
+    }
+
+    .mini-toggle-slider::before {
+        content: "";
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        left: 3px;
+        bottom: 3px;
+        background: #fff;
+        border-radius: 50%;
+        transition: all 0.3s ease;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+
+    .mini-toggle input:checked+.mini-toggle-slider {
+        background: #3b82f6;
+    }
+
+    .mini-toggle input:checked+.mini-toggle-slider::before {
+        transform: translateX(18px);
+    }
+
+    /* RIGHT: Parameters Panel */
+    .params-panel {
+        background: #fff;
+        border-left: 1px solid #e5e7eb;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        height: 100%;
+    }
+
+    .params-header {
+        font-size: 10px;
+        font-weight: 700;
+        color: #6b7280;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        padding: 10px 12px 8px;
+        border-bottom: 1px solid #e5e7eb;
+        background: #fafbfc;
+        flex-shrink: 0;
+    }
+
+    .params-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px 16px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-evenly;
+        gap: 16px;
+        min-height: 0;
+    }
+
+    /* Compact Controls */
+    .control-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+    }
+
+    .control-label {
+        font-size: 11px;
+        font-weight: 500;
+        color: #6b7280;
+        white-space: nowrap;
+    }
+
+    /* Compact Slider */
+    .slider-control {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .slider-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .slider-value {
+        font-size: 10px;
+        font-weight: 600;
+        color: #3b82f6;
+        background: #eff6ff;
+        padding: 1px 5px;
+        border-radius: 3px;
+        min-width: 28px;
+        text-align: center;
+    }
+
+    .slider-wrapper {
+        position: relative;
+        height: 18px;
+        display: flex;
+        align-items: center;
+    }
+
+    .slider-track {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 5px;
+        background: #e2e8f0;
+        border-radius: 3px;
+    }
+
+    .slider-fill {
+        position: absolute;
+        left: 0;
+        height: 5px;
+        background: linear-gradient(90deg, #3b82f6, #60a5fa);
+        border-radius: 3px;
+        width: 0%;
+    }
+
+    .cc-range {
+        width: 100%;
+        appearance: none;
+        height: 18px;
+        background: transparent;
+        cursor: pointer;
+        outline: none;
+        margin: 0;
+        position: relative;
+        z-index: 2;
+    }
+
+    .cc-range::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        background: #fff;
+        border: 2px solid #3b82f6;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+        transition: all 0.15s ease;
+    }
+
+    .cc-range::-webkit-slider-thumb:hover {
+        transform: scale(1.15);
+        box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+    }
+
+    .cc-range::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
+        background: #fff;
+        border: 2px solid #3b82f6;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    }
+
+    .slider-labels {
+        display: none;
+    }
+
+    /* Select */
+    .styled-select {
+        position: relative;
+        flex: 1;
+        max-width: 140px;
+    }
+
+    .styled-select select {
+        width: 100%;
+        padding: 6px 28px 6px 10px;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        background: #fafbfc;
+        color: #1f2937;
+        cursor: pointer;
+        appearance: none;
+    }
+
+    .styled-select select:focus {
+        outline: none;
+        border-color: #3b82f6;
+    }
+
+    .styled-select::after {
+        content: "";
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-top: 4px solid #9ca3af;
+        pointer-events: none;
+    }
+
+    /* Toggle Switch */
+    .toggle-switch {
+        position: relative;
+        width: 36px;
+        height: 20px;
+        flex-shrink: 0;
+    }
+
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        inset: 0;
+        background: #e5e7eb;
+        border-radius: 20px;
+        transition: all 0.3s ease;
+    }
+
+    .toggle-slider::before {
+        content: "";
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        left: 3px;
+        bottom: 3px;
+        background: #fff;
+        border-radius: 50%;
+        transition: all 0.3s ease;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    }
+
+    .toggle-switch input:checked+.toggle-slider {
+        background: #3b82f6;
+    }
+
+    .toggle-switch input:checked+.toggle-slider::before {
+        transform: translateX(16px);
+    }
+
+    /* Results Section */
+    .results-section {
+        padding: 10px;
+        border-top: 1px solid #e5e7eb;
+        background: #fafbfc;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .count-display {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+
+    .count-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #64748b;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+    }
+
+    .count-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: #0f172a;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        letter-spacing: -0.5px;
+    }
+
+    .cc-btn {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        color: white;
+        padding: 10px 16px;
+        font-size: 11px;
+        font-weight: 600;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        width: 100%;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        box-shadow: 0 3px 10px rgba(59, 130, 246, 0.3);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .cc-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+    }
+
+    .cc-btn:disabled {
+        background: #cbd5e1;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .cc-btn svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+        .main-layout {
+            grid-template-columns: 80px 1fr 260px;
+        }
+    }
+
+    @media (max-width: 768px) {
+        body {
+            height: auto;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .main-layout {
+            display: flex;
+            flex-direction: column;
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible;
+        }
+
+        .samples-sidebar {
+            width: 100%;
+            height: auto;
+            border-right: none;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 12px;
+            overflow: visible;
+        }
+
+        .samples-scroll {
+            flex-direction: row;
+            overflow-x: auto;
+            overflow-y: hidden;
+            width: 100%;
+            gap: 12px;
+            padding-bottom: 4px;
+        }
+
+        .sample-thumb {
+            width: 70px;
+            height: 70px;
+            flex-shrink: 0;
+        }
+
+        .viewer-section {
+            height: 400px;
+            /* Fixed height for viewer on mobile */
+            min-height: 400px;
+        }
+
+        .params-panel {
+            border-left: none;
+            border-top: 1px solid #e5e7eb;
+            height: auto;
+            overflow: visible;
+        }
+
+        .params-content {
+            padding: 20px;
+            gap: 24px;
+            overflow: visible;
+            justify-content: flex-start;
+        }
+
+        .control-row {
+            margin-bottom: 4px;
+        }
+
+        .slider-control {
+            margin-bottom: 8px;
+        }
+    }
+
+    .colony-type-label {
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        color: #0f172a;
+        font-weight: 700;
+        font-size: 14px;
+        z-index: 20;
+        pointer-events: none;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 8px 16px;
+        border-radius: 6px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        backdrop-filter: blur(4px);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Tooltips */
+    .info-icon-wrapper {
+        display: inline-flex;
+        align-items: center;
+        margin-left: 6px;
+        position: relative;
+        cursor: help;
+        vertical-align: middle;
+    }
+
+    .info-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        background-color: #e2e8f0;
+        color: #64748b;
+        border-radius: 50%;
+        font-size: 10px;
+        font-weight: 700;
+        font-style: italic;
+        font-family: serif;
+        transition: all 0.2s ease;
+    }
+
+    .info-icon-wrapper:hover .info-icon {
+        background-color: #3b82f6;
+        color: white;
+    }
+
+    .info-tooltip {
+        visibility: hidden;
+        opacity: 0;
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%) translateY(0);
+        margin-bottom: 8px;
+        width: 200px;
+        padding: 8px 12px;
+        background-color: #1e293b;
+        color: white;
+        font-size: 11px;
+        line-height: 1.4;
+        border-radius: 6px;
+        text-align: center;
+        z-index: 50;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        transition: all 0.2s ease;
+        pointer-events: none;
+        font-weight: 400;
+        white-space: normal;
+    }
+
+    .info-tooltip::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        margin-left: -5px;
+        border-width: 5px;
+        border-style: solid;
+        border-color: #1e293b transparent transparent transparent;
+    }
+
+    .info-icon-wrapper:hover .info-tooltip {
+        visibility: visible;
+        opacity: 1;
+        transform: translateX(-50%) translateY(-4px);
+    }
+
+    /* Bottom Tooltip Modifier */
+    .info-tooltip.tooltip-bottom {
+        bottom: auto;
+        top: 100%;
+        margin-bottom: 0;
+        margin-top: 8px;
+    }
+
+    .info-tooltip.tooltip-bottom::after {
+        top: auto;
+        bottom: 100%;
+        border-color: transparent transparent #1e293b transparent;
+    }
+
+    .info-icon-wrapper:hover .info-tooltip.tooltip-bottom {
+        transform: translateX(-50%) translateY(4px);
+    }
+
+    /* Right Offset Modifier */
+    .info-tooltip.tooltip-offset-right {
+        left: -10px;
+        transform: none;
+    }
+
+    .info-tooltip.tooltip-offset-right::after {
+        left: 17px;
+        margin-left: 0;
+    }
+
+    .info-icon-wrapper:hover .info-tooltip.tooltip-offset-right {
+        transform: translateY(4px);
+    }
+
+    /* Right Offset Modifier */
+    .info-tooltip.tooltip-offset-right {
+        left: -10px;
+        transform: none;
+    }
+
+    .info-tooltip.tooltip-offset-right::after {
+        left: 17px;
+        margin-left: 0;
+    }
+
+    .info-icon-wrapper:hover .info-tooltip.tooltip-offset-right {
+        transform: translateY(4px);
+    }
+</style>
+
+<div class="cc-app-container" id="colonyAppRoot">
+    <div class="main-layout">
+        <!-- LEFT: Sample Images -->
+        <div class="samples-sidebar">
+            <div class="samples-scroll" id="galleryRow"></div>
+        </div>
+
+        <!-- CENTER: Image Viewer -->
+        <div class="viewer-section">
+            <div class="viewer-frame">
+                <div id="zoomViewport">
+                    <span id="colonyTypeLabel" class="colony-type-label"></span>
+                    <span id="viewerStatus">Select an image...</span>
+                    <div id="resultContainer">
+                        <img id="displayImage" src="">
+                        <canvas id="dishCircleCanvas"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="viewer-toolbar">
+                <div class="toolbar-group">
+                    <button id="btnZoomIn" class="icon-btn" title="Zoom In">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8" />
+                            <path d="M21 21l-4.35-4.35M11 8v6M8 11h6" />
+                        </svg>
+                    </button>
+                    <button id="btnZoomOut" class="icon-btn" title="Zoom Out">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8" />
+                            <path d="M21 21l-4.35-4.35M8 11h6" />
+                        </svg>
+                    </button>
+                    <button id="btnReset" class="icon-btn" title="Fit to View">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="overlay-toggle" style="display: none;">
+                    <span>Overlay</span>
+                    <label class="mini-toggle">
+                        <input type="checkbox" id="overlayToggle" checked>
+                        <span class="mini-toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT: Parameters Panel -->
+        <div class="params-panel">
+            <div class="params-header">Parameters</div>
+
+            <div class="params-content">
+                <!-- Invert Image -->
+                <!-- Invert Image -->
+                <div class="control-row" style="display: none;">
+                    <span class="control-label">Invert Image</span>
+                    <label class="toggle-switch">
+                        <input id="annInvertImage" type="checkbox">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <!-- Threshold Type -->
+                <!-- Threshold Type -->
+                <div class="control-row">
+                    <span class="control-label">Threshold Type<span class="info-icon-wrapper"><span
+                                class="info-icon">i</span><span class="info-tooltip tooltip-bottom">Choose based on
+                                colony brightness
+                                vs background. Regular: dark colonies on light background. Inverted: light colonies on
+                                dark background. Bilateral: mixed contrast.</span></span></span>
+                    <div class="styled-select">
+                        <select id="annThresholdType">
+                            <option value="regular">Regular</option>
+                            <option value="inverted">Inverted</option>
+                            <option value="bilateral">Bilateral</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Threshold -->
+                <div class="slider-control">
+                    <div class="slider-header">
+                        <span class="control-label">Threshold<span class="info-icon-wrapper"><span
+                                    class="info-icon">i</span><span
+                                    class="info-tooltip tooltip-bottom tooltip-offset-right">Controls
+                                    detection sensitivity.
+                                    Higher values = fewer detections (stricter). Lower values = more detections (may
+                                    include noise). Typical range: 3-30.</span></span></span>
+                        <span class="slider-value" id="annThresholdValueLabel">15</span>
+                    </div>
+                    <div class="slider-wrapper">
+                        <div class="slider-track"></div>
+                        <div class="slider-fill" id="annThresholdValueFill"></div>
+                        <input id="annThresholdValue" class="cc-range" type="range" min="0" max="255" value="15">
+                    </div>
+                    <div class="slider-labels"><span>0</span><span>255</span></div>
+                </div>
+
+                <!-- Min Radius -->
+                <div class="slider-control">
+                    <div class="slider-header">
+                        <span class="control-label">Min Radius (px)<span class="info-icon-wrapper"><span
+                                    class="info-icon">i</span><span class="info-tooltip">Minimum colony size in pixels.
+                                    Increase to filter out small particles and noise. Colonies smaller than this will be
+                                    ignored.</span></span></span>
+                        <span class="slider-value" id="annMinRadiusLabel">3</span>
+                    </div>
+                    <div class="slider-wrapper">
+                        <div class="slider-track"></div>
+                        <div class="slider-fill" id="annMinRadiusFill"></div>
+                        <input id="annMinRadius" class="cc-range" type="range" min="0" max="100" value="3">
+                    </div>
+                    <div class="slider-labels"><span>0</span><span>100</span></div>
+                </div>
+
+                <!-- Max Radius -->
+                <div class="slider-control">
+                    <div class="slider-header">
+                        <span class="control-label">Max Radius (px)<span class="info-icon-wrapper"><span
+                                    class="info-icon">i</span><span class="info-tooltip">Maximum colony size in pixels.
+                                    Colonies larger than this will be ignored. Useful for excluding large artifacts or
+                                    merged colonies.</span></span></span>
+                        <span class="slider-value" id="annMaxRadiusLabel">50</span>
+                    </div>
+                    <div class="slider-wrapper">
+                        <div class="slider-track"></div>
+                        <div class="slider-fill" id="annMaxRadiusFill"></div>
+                        <input id="annMaxRadius" class="cc-range" type="range" min="1" max="200" value="50">
+                    </div>
+                    <div class="slider-labels"><span>1</span><span>200</span></div>
+                </div>
+
+                <!-- Coarseness -->
+                <div class="slider-control">
+                    <div class="slider-header">
+                        <span class="control-label">Coarseness<span class="info-icon-wrapper"><span
+                                    class="info-icon">i</span><span class="info-tooltip">Controls edge detection
+                                    granularity. Lower values detect finer colony edges. Higher values are faster but
+                                    may miss small colonies.</span></span></span>
+                        <span class="slider-value" id="annCoarsenessLabel">10</span>
+                    </div>
+                    <div class="slider-wrapper">
+                        <div class="slider-track"></div>
+                        <div class="slider-fill" id="annCoarsenessFill"></div>
+                        <input id="annCoarseness" class="cc-range" type="range" min="1" max="50" step="0.1" value="10">
+                    </div>
+                    <div class="slider-labels"><span>1</span><span>50</span></div>
+                </div>
+
+                <!-- Neighbours -->
+                <div class="slider-control">
+                    <div class="slider-header">
+                        <span class="control-label">Neighbours<span class="info-icon-wrapper"><span
+                                    class="info-icon">i</span><span class="info-tooltip">Number of nearby pixels
+                                    analyzed for each detection. Higher values improve accuracy but slow down
+                                    processing.</span></span></span>
+                        <span class="slider-value" id="annNeighboursLabel">10</span>
+                    </div>
+                    <div class="slider-wrapper">
+                        <div class="slider-track"></div>
+                        <div class="slider-fill" id="annNeighboursFill"></div>
+                        <input id="annNeighbours" class="cc-range" type="range" min="4" max="50" value="10">
+                    </div>
+                    <div class="slider-labels"><span>4</span><span>50</span></div>
+                </div>
+
+                <!-- Color Grouping -->
+                <div class="control-row">
+                    <span class="control-label">Color Grouping<span class="info-icon-wrapper"><span
+                                class="info-icon">i</span><span class="info-tooltip">Groups colonies by similar colors.
+                                Useful for distinguishing different bacteria types or excluding unwanted objects based
+                                on color.</span></span></span>
+                    <label class="toggle-switch">
+                        <input id="annEnableColorGrouping" type="checkbox">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Results & Button -->
+            <div class="results-section">
+                <div class="count-display">
+                    <span class="count-label">Count</span>
+                    <span class="count-value" id="colonyCount">0</span>
+                </div>
+                <button id="processBtn" class="cc-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                    Run Detection
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const galleryImages = [
+            { id: "WIN_20250905_11_49_20_Pro", typeName: "MacConkey Plates", src: "https://cdn.shopify.com/s/files/1/0916/7968/6953/files/WIN_20250905_11_49_20_Pro.jpg?v=1768658241" },
+            { id: "WIN_20250905_11_48_18_Pro", typeName: "MacConkey Plates", src: "https://cdn.shopify.com/s/files/1/0916/7968/6953/files/WIN_20250905_11_48_18_Pro.jpg?v=1768658261" },
+            { id: "WIN_20250905_11_42_42_Pro", typeName: "Nutrient Plate", src: "https://cdn.shopify.com/s/files/1/0916/7968/6953/files/WIN_20250905_11_42_42_Pro.jpg?v=1768658294" },
+            { id: "WIN_20250905_11_44_26_Pro", typeName: "Nutrient Plate", src: "https://cdn.shopify.com/s/files/1/0916/7968/6953/files/WIN_20250905_11_44_26_Pro.jpg?v=1768658311" },
+            { id: "complex1", typeName: "Anaerobic Count Film", src: "https://cdn.shopify.com/s/files/1/0916/7968/6953/files/complex_1.jpg?v=1768658362" },
+            { id: "standard1", typeName: "Anaerobic Count Film", src: "https://cdn.shopify.com/s/files/1/0916/7968/6953/files/standard_1.jpg?v=1768658362" },
+            { id: "85.bmp", typeName: "Coliform (CC) Film", src: "https://cdn.shopify.com/s/files/1/0916/7968/6953/files/85.bmp?v=1768658417" },
+            { id: "82.bmp", typeName: "Coliform (CC) Film", src: "https://cdn.shopify.com/s/files/1/0916/7968/6953/files/82.bmp?v=1768658433" }
+        ];
+
+        let currentImageId = galleryImages[0].id;
+        let currentImageSrc = galleryImages[0].src;
+        let currentScale = 1, panX = 0, panY = 0;
+        let minScale = 0.1;
+        let isDragging = false, startX, startY;
+        let showOverlay = true;
+
+        const initInterval = setInterval(() => {
+            if (document.getElementById('colonyAppRoot')) {
+                clearInterval(initInterval);
+                initApp();
+            }
+        }, 100);
+
+        function initApp() {
+            const gallery = document.getElementById('galleryRow');
+            gallery.innerHTML = '';
+
+            galleryImages.forEach((item, idx) => {
+                const img = document.createElement('img');
+                img.src = item.src;
+                img.className = 'sample-thumb' + (idx === 0 ? ' active' : '');
+                img.onclick = () => selectImage(item, img);
+                gallery.appendChild(img);
+            });
+
+            document.getElementById('btnZoomIn').onclick = () => zoomAtCenter(1.2);
+            document.getElementById('btnZoomOut').onclick = () => zoomAtCenter(1 / 1.2);
+            document.getElementById('btnReset').onclick = resetView;
+            document.getElementById('processBtn').onclick = processSelectedImage;
+            document.getElementById('overlayToggle').onchange = function () {
+                showOverlay = this.checked;
+                document.querySelectorAll('.colony-marker').forEach(m => m.style.display = showOverlay ? 'block' : 'none');
+            };
+
+            const sliders = ['annThresholdValue', 'annMinRadius', 'annMaxRadius', 'annCoarseness', 'annNeighbours'];
+            sliders.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    const update = () => {
+                        document.getElementById(id + 'Label').textContent = el.value;
+                        const pct = ((el.value - el.min) / (el.max - el.min)) * 100;
+                        document.getElementById(id + 'Fill').style.width = pct + '%';
+                    };
+                    el.oninput = update;
+                    update();
+                }
+            });
+
+            setupViewerControls();
+
+            // Set initial label
+            if (galleryImages.length > 0) {
+                document.getElementById('colonyTypeLabel').textContent = galleryImages[0].typeName || '';
+            }
+
+            loadImageIntoViewer(currentImageSrc);
+        }
+
+        function selectImage(item, thumb) {
+            currentImageId = item.id;
+            currentImageSrc = item.src;
+
+            // Update label
+            document.getElementById('colonyTypeLabel').textContent = item.typeName || '';
+
+            document.querySelectorAll('.sample-thumb').forEach(el => el.classList.remove('active'));
+            thumb.classList.add('active');
+            document.querySelectorAll('.colony-marker').forEach(el => el.remove());
+            clearDishCircle();
+            document.getElementById('colonyCount').textContent = '0';
+            loadImageIntoViewer(item.src);
+        }
+
+        function loadImageIntoViewer(src) {
+            const img = document.getElementById('displayImage');
+            const status = document.getElementById('viewerStatus');
+            status.style.display = 'block';
+            status.textContent = 'Loading...';
+            img.style.opacity = '0.3';
+            img.onload = () => {
+                status.style.display = 'none';
+                img.style.opacity = '1';
+                resetView();
+                clearDishCircle();
+            };
+            img.src = src;
+        }
+
+        async function processSelectedImage() {
+            const btn = document.getElementById('processBtn');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="8"/></svg> Processing...';
+            btn.disabled = true;
+
+            try {
+                const payload = {
+                    image_id: currentImageId,
+                    threshold_type: document.getElementById('annThresholdType').value,
+                    threshold_value: +document.getElementById('annThresholdValue').value,
+                    min_radius: +document.getElementById('annMinRadius').value,
+                    max_radius: +document.getElementById('annMaxRadius').value,
+                    coarseness: +document.getElementById('annCoarseness').value,
+                    neighbours: +document.getElementById('annNeighbours').value,
+                    enable_color_grouping: document.getElementById('annEnableColorGrouping').checked
+                };
+
+                const res = await fetch('http://localhost:3000/detect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+
+                if (data.success && data.colonies) {
+                    drawMarkers(data.colonies);
+                    drawDishCircleFromResponse(data);
+                    document.getElementById('colonyCount').textContent = data.colonies.length;
+                } else {
+                    document.getElementById('colonyCount').textContent = '0';
+                    clearDishCircle();
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            } finally {
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        }
+
+        function drawMarkers(colonies) {
+            const container = document.getElementById('resultContainer');
+            document.querySelectorAll('.colony-marker').forEach(el => el.remove());
+            colonies.forEach(c => {
+                const m = document.createElement('div');
+                m.className = 'colony-marker';
+                m.style.cssText = `position:absolute;left:${c.x}px;top:${c.y}px;width:${c.radius * 2}px;height:${c.radius * 2}px;border:2px solid #22c55e;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;box-shadow:0 0 6px rgba(34,197,94,0.5);display:${showOverlay ? 'block' : 'none'}`;
+                container.appendChild(m);
+            });
+        }
+
+        function ensureDishCanvasSized() {
+            const img = document.getElementById('displayImage');
+            const canvas = document.getElementById('dishCircleCanvas');
+            if (!img || !canvas || !img.naturalWidth || !img.naturalHeight) return;
+
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            canvas.style.width = img.naturalWidth + 'px';
+            canvas.style.height = img.naturalHeight + 'px';
+        }
+
+        function clearDishCircle() {
+            const canvas = document.getElementById('dishCircleCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, canvas.width || 0, canvas.height || 0);
+        }
+
+        function drawDishCircleFromResponse(data) {
+            // Prefer top-level fields; fall back to meta (for backwards compatibility).
+            const circle =
+                (data && data.detectedCircle) ||
+                (data && data.meta && data.meta.detected_circle) ||
+                null;
+
+            ensureDishCanvasSized();
+            const canvas = document.getElementById('dishCircleCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!circle || !circle.present || !circle.center) return;
+
+            const cx = Number(circle.center.x);
+            const cy = Number(circle.center.y);
+            const r = Number(circle.radius);
+            if (!Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(r) || r <= 0) return;
+
+            ctx.save();
+            ctx.strokeStyle = 'rgba(59, 130, 246, 0.9)';
+            ctx.lineWidth = 4;
+            ctx.setLineDash([12, 10]);
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Center point
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(59, 130, 246, 0.9)';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function setupViewerControls() {
+            const vp = document.getElementById('zoomViewport');
+
+            vp.onmousedown = e => {
+                e.preventDefault();
+                isDragging = true;
+                startX = e.clientX - panX;
+                startY = e.clientY - panY;
+                vp.style.cursor = 'grabbing';
+            };
+
+            document.onmousemove = e => {
+                if (!isDragging) return;
+                panX = e.clientX - startX;
+                panY = e.clientY - startY;
+                applyTransform();
+            };
+
+            document.onmouseup = () => {
+                isDragging = false;
+                document.getElementById('zoomViewport').style.cursor = 'crosshair';
+            };
+
+            vp.onwheel = e => {
+                e.preventDefault();
+                const rect = vp.getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const my = e.clientY - rect.top;
+                const dir = e.deltaY < 0 ? 1.1 : 0.9;
+                const next = Math.max(minScale, Math.min(10, currentScale * dir));
+                panX = mx - (mx - panX) * (next / currentScale);
+                panY = my - (my - panY) * (next / currentScale);
+                currentScale = next;
+                applyTransform();
+            };
+
+            let lastDist = 0;
+            vp.ontouchstart = e => {
+                if (e.touches.length === 1) {
+                    isDragging = true;
+                    startX = e.touches[0].clientX - panX;
+                    startY = e.touches[0].clientY - panY;
+                } else if (e.touches.length === 2) {
+                    lastDist = Math.hypot(e.touches[1].clientX - e.touches[0].clientX, e.touches[1].clientY - e.touches[0].clientY);
+                }
+            };
+            vp.ontouchmove = e => {
+                e.preventDefault();
+                if (e.touches.length === 1 && isDragging) {
+                    panX = e.touches[0].clientX - startX;
+                    panY = e.touches[0].clientY - startY;
+                    applyTransform();
+                } else if (e.touches.length === 2) {
+                    const d = Math.hypot(e.touches[1].clientX - e.touches[0].clientX, e.touches[1].clientY - e.touches[0].clientY);
+                    currentScale = Math.max(minScale, Math.min(10, currentScale * (1 + (d - lastDist) * 0.005)));
+                    lastDist = d;
+                    applyTransform();
+                }
+            };
+            vp.ontouchend = () => isDragging = false;
+        }
+
+        function applyTransform() {
+            const vp = document.getElementById('zoomViewport');
+            const img = document.getElementById('displayImage');
+            if (!img.naturalWidth) return;
+
+            const iw = img.naturalWidth * currentScale;
+            const ih = img.naturalHeight * currentScale;
+            const vw = vp.clientWidth;
+            const vh = vp.clientHeight;
+
+            if (iw <= vw) panX = (vw - iw) / 2;
+            else panX = Math.min(0, Math.max(vw - iw, panX));
+
+            if (ih <= vh) panY = (vh - ih) / 2;
+            else panY = Math.min(0, Math.max(vh - ih, panY));
+
+            document.getElementById('resultContainer').style.transform = `translate(${panX}px,${panY}px) scale(${currentScale})`;
+        }
+
+        function resetView() {
+            const vp = document.getElementById('zoomViewport');
+            const img = document.getElementById('displayImage');
+            const container = document.getElementById('resultContainer');
+            if (!img.naturalWidth) return;
+
+            container.style.width = img.naturalWidth + 'px';
+            container.style.height = img.naturalHeight + 'px';
+            ensureDishCanvasSized();
+
+            const sx = vp.clientWidth / img.naturalWidth;
+            const sy = vp.clientHeight / img.naturalHeight;
+            minScale = Math.min(sx, sy, 1);
+            currentScale = minScale;
+            applyTransform();
+        }
+
+        function zoomAtCenter(factor) {
+            const vp = document.getElementById('zoomViewport');
+            const cx = vp.clientWidth / 2;
+            const cy = vp.clientHeight / 2;
+            const next = Math.max(minScale, Math.min(10, currentScale * factor));
+            panX = cx - (cx - panX) * (next / currentScale);
+            panY = cy - (cy - panY) * (next / currentScale);
+            currentScale = next;
+            applyTransform();
+        }
+
+        const style = document.createElement('style');
+        style.textContent = '@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}';
+        document.head.appendChild(style);
+    })();
+</script>
+
+{% else %}
+
+<style>
+    .gate-container {
+        max-width: 800px;
+        margin: 60px auto;
+        padding: 40px 24px;
+        text-align: center;
+        background: #fff;
+        border-radius: 20px;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+        border: 1px solid #e2e8f0;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    .gate-icon {
+        width: 64px;
+        height: 64px;
+        background: #f1f5f9;
+        color: #000000;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 24px;
+    }
+
+    .gate-title {
+        font-size: 28px;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0 0 12px 0;
+    }
+
+    .gate-desc {
+        font-size: 16px;
+        color: #64748b;
+        line-height: 1.6;
+        max-width: 480px;
+        margin: 0 auto 32px auto;
+    }
+
+    .gate-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .btn-gate {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 14px 32px;
+        font-size: 16px;
+        font-weight: 600;
+        border-radius: 8px;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        width: 100%;
+        max-width: 320px;
+    }
+
+    .btn-primary {
+        background: #000000;
+        color: #ffffff;
+        border: 1px solid #000000;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    }
+
+    .btn-primary:hover {
+        background: #333333;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 10px -1px rgba(0, 0, 0, 0.4);
+    }
+
+    .btn-secondary {
+        background: transparent;
+        color: #64748b;
+        border: 1px solid #e2e8f0;
+    }
+
+    .btn-secondary:hover {
+        background: #f8fafc;
+        color: #1e293b;
+        border-color: #cbd5e1;
+    }
+
+    @media (min-width: 640px) {
+        .gate-actions {
+            flex-direction: row;
+        }
+
+        .btn-gate {
+            width: auto;
+            min-width: 160px;
+        }
+
+        .gate-container {
+            padding: 80px 40px;
+        }
+    }
+</style>
+
+<div class="gate-container">
+    <div class="gate-icon">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+    </div>
+
+    <h2 class="gate-title">Try the Colony Counter Demo</h2>
+    <p class="gate-desc">
+        Unlock access to our AI-powered colony analysis tool. Create a free account to test the detection algorithm on
+        sample images.
+    </p>
+
+    <div class="gate-actions">
+        <a href="/account/register" class="btn-gate btn-primary">Sign Up Free</a>
+        <a href="/account/login" class="btn-gate btn-secondary">Log In</a>
+    </div>
+</div>
+
+{% endif %}

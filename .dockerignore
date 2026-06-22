@@ -1,0 +1,4 @@
+node_modules
+.git
+.DS_Store
+# Do NOT ignore core_engine - it is required for directory structure

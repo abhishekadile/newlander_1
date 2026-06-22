@@ -1,0 +1,10 @@
+Invoke-RestMethod -Uri "https://your-api/api/license/seed" `
+  -Method POST `
+  -ContentType "application/json" `
+  -Body '{
+    "adminSecret": "change-me-to-something-secret",
+    "keys": [
+      { "licenseKey": "VY3H-97QK-T1ZP-4MA8", "productType": "colony" },
+      { "licenseKey": "XXXX-YYYY-ZZZZ-1234", "productType": "colony" }
+    ]
+  }'

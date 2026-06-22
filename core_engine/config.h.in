@@ -1,0 +1,114 @@
+/* config.h.in.  Generated from configure.ac by autoheader.  */
+
+/* Location of the banner */
+#undef BACKGROUND_NOISE
+
+/* Location of the banner */
+#undef BANNER_IMG
+
+/* Print debug info in stdout */
+#undef DBG_MESSAGE
+
+/* define if the compiler supports basic C++11 syntax */
+#undef HAVE_CXX11
+
+/* Define to 1 if you have the <inttypes.h> header file. */
+#undef HAVE_INTTYPES_H
+
+/* Define to 1 if stdbool.h conforms to C99. */
+#undef HAVE_STDBOOL_H
+
+/* Define to 1 if you have the <stdint.h> header file. */
+#undef HAVE_STDINT_H
+
+/* Define to 1 if you have the <stdio.h> header file. */
+#undef HAVE_STDIO_H
+
+/* Define to 1 if you have the <stdlib.h> header file. */
+#undef HAVE_STDLIB_H
+
+/* Define to 1 if you have the <strings.h> header file. */
+#undef HAVE_STRINGS_H
+
+/* Define to 1 if you have the <string.h> header file. */
+#undef HAVE_STRING_H
+
+/* Define to 1 if you have the <sys/stat.h> header file. */
+#undef HAVE_SYS_STAT_H
+
+/* Define to 1 if you have the <sys/types.h> header file. */
+#undef HAVE_SYS_TYPES_H
+
+/* Define to 1 if you have the <unistd.h> header file. */
+#undef HAVE_UNISTD_H
+
+/* Define to 1 if the system has the type '_Bool'. */
+#undef HAVE__BOOL
+
+/* Location of the 128px icon */
+#undef ICON128_IMG
+
+/* Location of the 24px icon */
+#undef ICON24_IMG
+
+/* Location of the 48px icon */
+#undef ICON48_IMG
+
+/* Location of the 64px icon */
+#undef ICON64_IMG
+
+/* Location of the logo */
+#undef LOGO_IMG
+
+/* Define to the address where bug reports for this package should be sent. */
+#undef PACKAGE_BUGREPORT
+
+/* Define to the full name of this package. */
+#undef PACKAGE_NAME
+
+/* Define to the full name and version of this package. */
+#undef PACKAGE_STRING
+
+/* Define to the one symbol short name of this package. */
+#undef PACKAGE_TARNAME
+
+/* Define to the home page for this package. */
+#undef PACKAGE_URL
+
+/* Define to the version of this package. */
+#undef PACKAGE_VERSION
+
+/* The actual name (Capitals) */
+#undef PROGRAM_NAME
+
+/* Define to 1 if all of the C89 standard headers exist (not just the ones
+   required in a freestanding environment). This macro is provided for
+   backward compatibility; new code need not use it. */
+#undef STDC_HEADERS
+
+/* Location of the test set */
+#undef TEST_SET_IMG
+
+/* Location of the classifier post-splitting */
+#undef TRAINED_CLASSIF_PS_XML_FILE
+
+/* Location of the classifier */
+#undef TRAINED_CLASSIF_XML_FILE
+
+/* Location of the training set */
+#undef TRAINING_SET_IMG
+
+/* Location of the training set post-splitting */
+#undef TRAINING_SET_IMG_PS
+
+/* We build opencv witha GUI */
+#undef WITH_GUI
+
+/* Define to '__inline__' or '__inline' if that's what the C compiler
+   calls it, or to nothing if 'inline' is not supported under any name.  */
+#ifndef __cplusplus
+#undef inline
+#endif
+
+/* Define as 'unsigned int' if <stddef.h> doesn't define. */
+#undef size_t

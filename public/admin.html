@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IncuCount | Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#10b981',
+                        dark: '#0f172a',
+                        darker: '#020617',
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+        }
+        #appShell { height: 100dvh; }
+        #appSidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 40;
+            height: 100dvh;
+            width: 16rem;
+            transition: width 0.22s ease, transform 0.22s ease;
+        }
+        #appMain {
+            margin-left: 0;
+            height: 100dvh;
+            transition: margin-left 0.22s ease;
+        }
+        #appShell .sidebar-label,
+        #appShell .sidebar-brand-text { transition: opacity 0.15s ease; }
+        #appShell.sidebar-collapsed:not(.sidebar-drawer-open) .sidebar-label,
+        #appShell.sidebar-collapsed:not(.sidebar-drawer-open) .sidebar-brand-text {
+            display: none;
+        }
+        #appShell.sidebar-collapsed #appSidebar { width: 4.5rem; }
+        #appShell.sidebar-collapsed .nav-btn,
+        #appShell.sidebar-collapsed .nav-footer-link,
+        #appShell.sidebar-collapsed .sidebar-footer-btn {
+            justify-content: center;
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+            gap: 0;
+        }
+        #appShell.sidebar-collapsed .sidebar-header-inner {
+            justify-content: center;
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }
+        #appShell.sidebar-collapsed #sidebarCollapseBtn { margin: 0 auto; }
+        @media (min-width: 768px) {
+            #appShell.sidebar-expanded #appMain { margin-left: 16rem; }
+            #appShell.sidebar-collapsed #appMain { margin-left: 4.5rem; }
+            #appShell.sidebar-hidden #appMain { margin-left: 0; }
+            #appShell.sidebar-hidden #appSidebar { transform: translateX(-100%); }
+            #appShell.sidebar-hidden.sidebar-drawer-open #appSidebar {
+                transform: translateX(0);
+                width: 16rem;
+                box-shadow: 4px 0 24px rgba(0, 0, 0, 0.45);
+            }
+            #appShell.sidebar-hidden.sidebar-drawer-open .sidebar-label,
+            #appShell.sidebar-hidden.sidebar-drawer-open .sidebar-brand-text {
+                opacity: 1;
+                width: auto;
+                display: block;
+            }
+            #appShell.sidebar-hidden.sidebar-drawer-open .nav-btn,
+            #appShell.sidebar-hidden.sidebar-drawer-open .nav-footer-link,
+            #appShell.sidebar-hidden.sidebar-drawer-open .sidebar-footer-btn {
+                justify-content: flex-start;
+                gap: 0.75rem;
+            }
+        }
+        #sidebarBackdrop {
+            transition: opacity 0.2s ease;
+        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-darker text-slate-100 min-h-screen antialiased">
+
+    <!-- Auth -->
+    <div id="authOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-darker/95 backdrop-blur-md">
+        <div class="glass p-8 rounded-2xl shadow-2xl w-full max-w-md text-center">
+            <div class="w-14 h-14 rounded-xl bg-primary/20 text-primary flex items-center justify-center mx-auto mb-4">
+                <i class="fa-solid fa-shield-halved text-xl"></i>
+            </div>
+            <h2 class="text-xl font-bold text-white">Admin sign in</h2>
+            <p class="text-sm text-slate-400 mt-1 mb-6">Enter your admin secret to manage licenses.</p>
+            <form id="authForm" class="space-y-4 text-left">
+                <input type="password" id="adminSecretInput" placeholder="Admin secret" required
+                    class="w-full bg-dark border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary">
+                <button type="submit" class="w-full bg-primary hover:bg-blue-600 text-white font-medium py-3 rounded-lg transition-colors">
+                    Continue
+                </button>
+            </form>
+            <p id="authError" class="mt-4 text-red-400 text-sm hidden"></p>
+        </div>
+    </div>
+
+    <!-- App shell -->
+    <div id="appShell" class="hidden overflow-hidden sidebar-expanded">
+        <div id="sidebarBackdrop" class="hidden fixed inset-0 z-30 bg-black/50 opacity-0 pointer-events-none" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
+
+        <!-- Sidebar: fixed, full height — stays put while main scrolls (tablet + desktop) -->
+        <aside id="appSidebar" class="hidden md:flex flex-col glass border-r border-slate-800">
+            <div class="p-3 border-b border-slate-800 shrink-0 space-y-3">
+                <div class="sidebar-header-inner flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-blue-700 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-key text-white text-sm"></i>
+                    </div>
+                    <div class="sidebar-brand-text min-w-0 flex-1">
+                        <p class="font-bold text-white leading-tight truncate">IncuCount</p>
+                        <p class="text-[10px] uppercase tracking-wider text-slate-500">Admin</p>
+                    </div>
+                </div>
+                <button type="button" id="sidebarCollapseBtn" onclick="toggleSidebar()" class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 border border-slate-800 transition-colors" title="Collapse sidebar">
+                    <i id="sidebarCollapseIcon" class="fa-solid fa-angles-left"></i>
+                    <span class="sidebar-label">Collapse</span>
+                </button>
+            </div>
+            <nav class="p-3 space-y-1 flex-1 overflow-y-auto">
+                <button type="button" data-panel="dashboard" title="Dashboard" class="nav-btn w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary/15 text-primary border border-primary/20">
+                    <i class="fa-solid fa-chart-pie w-4 shrink-0 text-center"></i>
+                    <span class="sidebar-label">Dashboard</span>
+                </button>
+                <button type="button" data-panel="generate" title="Generate keys" class="nav-btn w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors">
+                    <i class="fa-solid fa-plus w-4 shrink-0"></i>
+                    <span class="sidebar-label">Generate keys</span>
+                </button>
+                <a href="/profiles-admin.html" title="Colony profiles" class="nav-footer-link flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors">
+                    <i class="fa-solid fa-flask w-4 shrink-0"></i>
+                    <span class="sidebar-label">Colony profiles</span>
+                </a>
+            </nav>
+            <div class="p-3 border-t border-slate-800 space-y-1 shrink-0">
+                <a href="/KeyTemplate.html" target="_blank" title="Print template" class="nav-footer-link flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors">
+                    <i class="fa-solid fa-print w-4 shrink-0"></i>
+                    <span class="sidebar-label">Print template</span>
+                </a>
+                <button type="button" onclick="logout()" title="Logout" class="sidebar-footer-btn flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors text-left">
+                    <i class="fa-solid fa-right-from-bracket w-4 shrink-0"></i>
+                    <span class="sidebar-label">Logout</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Phone bottom nav (< 768px) -->
+        <nav id="mobileNav" class="md:hidden fixed bottom-0 left-0 right-0 z-50 glass border-t border-slate-800 px-2 py-2 safe-area-pb">
+            <div class="grid grid-cols-5 gap-1 max-w-lg mx-auto">
+                <button type="button" data-panel="dashboard" class="mobile-nav-btn flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-[10px] font-medium text-primary">
+                    <i class="fa-solid fa-chart-pie text-base"></i>
+                    <span>Dashboard</span>
+                </button>
+                <button type="button" data-panel="generate" class="mobile-nav-btn flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-[10px] font-medium text-slate-500">
+                    <i class="fa-solid fa-plus text-base"></i>
+                    <span>Generate</span>
+                </button>
+                <a href="/profiles-admin.html" class="flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-[10px] font-medium text-slate-500 hover:text-white">
+                    <i class="fa-solid fa-flask text-base"></i>
+                    <span>Profiles</span>
+                </a>
+                <a href="/KeyTemplate.html" target="_blank" class="flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-[10px] font-medium text-slate-500 hover:text-white">
+                    <i class="fa-solid fa-print text-base"></i>
+                    <span>Print</span>
+                </a>
+                <button type="button" onclick="logout()" class="flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-[10px] font-medium text-slate-500 hover:text-white">
+                    <i class="fa-solid fa-right-from-bracket text-base"></i>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main (only this column scrolls) -->
+        <div id="appMain" class="flex flex-col min-w-0 overflow-hidden pb-[4.5rem] md:pb-0">
+            <header class="glass border-b border-slate-800 px-4 md:px-8 py-4 flex items-center justify-between gap-3 shrink-0 z-20">
+                <div class="flex items-center gap-3 min-w-0 flex-1">
+                    <button type="button" id="sidebarOpenBtn" onclick="openSidebarDrawer()" class="hidden md:inline-flex shrink-0 p-2.5 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:border-slate-600 transition-colors" title="Open menu">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <div class="min-w-0">
+                        <h1 id="pageTitle" class="text-lg md:text-xl font-bold text-white truncate">License dashboard</h1>
+                        <p class="text-xs text-slate-500 mt-0.5 hidden sm:block">Manage keys, registrations, and downloads</p>
+                    </div>
+                </div>
+                <button type="button" onclick="fetchLicenses()" class="shrink-0 p-2.5 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:border-slate-600 transition-colors" title="Refresh">
+                    <i id="refreshIcon" class="fa-solid fa-rotate-right"></i>
+                </button>
+            </header>
+
+            <main class="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-8">
+                <!-- Dashboard panel -->
+                <section id="panelDashboard" class="space-y-6 max-w-[1400px] mx-auto">
+                    <!-- Stats -->
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                        <div class="glass rounded-xl p-4 md:p-5">
+                            <p class="text-xs uppercase tracking-wide text-slate-500 font-medium">Total keys</p>
+                            <p id="statTotal" class="text-2xl md:text-3xl font-bold text-white mt-1">—</p>
+                        </div>
+                        <div class="glass rounded-xl p-4 md:p-5">
+                            <p class="text-xs uppercase tracking-wide text-slate-500 font-medium">Available</p>
+                            <p id="statAvailable" class="text-2xl md:text-3xl font-bold text-emerald-400 mt-1">—</p>
+                        </div>
+                        <div class="glass rounded-xl p-4 md:p-5">
+                            <p class="text-xs uppercase tracking-wide text-slate-500 font-medium">Registered</p>
+                            <p id="statRegistered" class="text-2xl md:text-3xl font-bold text-blue-400 mt-1">—</p>
+                        </div>
+                        <div class="glass rounded-xl p-4 md:p-5">
+                            <p class="text-xs uppercase tracking-wide text-slate-500 font-medium">Installer downloaded</p>
+                            <p id="statDownloaded" class="text-2xl md:text-3xl font-bold text-amber-400 mt-1">—</p>
+                        </div>
+                    </div>
+
+                    <!-- Table card -->
+                    <div class="glass rounded-xl overflow-hidden flex flex-col min-h-[420px]">
+                        <div class="p-4 md:p-6 border-b border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                            <h2 class="font-semibold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-table-list text-primary"></i> All licenses
+                            </h2>
+                            <div class="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+                                <div class="relative flex-1 sm:min-w-[200px]">
+                                    <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+                                    <input type="text" id="searchInput" placeholder="Search key, device…"
+                                        class="w-full bg-dark border border-slate-700 text-sm rounded-lg pl-9 pr-3 py-2 text-white focus:outline-none focus:border-primary">
+                                </div>
+                                <select id="filterRegistration" class="bg-dark border border-slate-700 text-sm rounded-lg px-3 py-2 text-white focus:outline-none focus:border-primary">
+                                    <option value="all">All registration</option>
+                                    <option value="available">Unregistered</option>
+                                    <option value="used">Registered</option>
+                                </select>
+                                <select id="filterProduct" class="bg-dark border border-slate-700 text-sm rounded-lg px-3 py-2 text-white focus:outline-none focus:border-primary">
+                                    <option value="all">All products</option>
+                                    <option value="colony">Colony</option>
+                                    <option value="cells">Cells</option>
+                                </select>
+                                <select id="filterDownload" class="bg-dark border border-slate-700 text-sm rounded-lg px-3 py-2 text-white focus:outline-none focus:border-primary">
+                                    <option value="all">All downloads</option>
+                                    <option value="downloaded">Installer used</option>
+                                    <option value="not_downloaded">Installer not used</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto flex-1">
+                            <table class="w-full text-left min-w-[800px]">
+                                <thead class="bg-slate-900/80 text-[11px] uppercase tracking-wider text-slate-500">
+                                    <tr>
+                                        <th class="px-4 md:px-6 py-3 font-medium">License key</th>
+                                        <th class="px-4 md:px-6 py-3 font-medium">Product</th>
+                                        <th class="px-4 md:px-6 py-3 font-medium">Registration</th>
+                                        <th class="px-4 md:px-6 py-3 font-medium">Download</th>
+                                        <th class="px-4 md:px-6 py-3 font-medium">Created</th>
+                                        <th class="px-4 md:px-6 py-3 font-medium text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="licenseTableBody" class="text-sm divide-y divide-slate-800/80"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Generate panel -->
+                <section id="panelGenerate" class="hidden max-w-lg mx-auto">
+                    <div class="glass rounded-xl p-6 md:p-8">
+                        <h2 class="text-lg font-semibold text-white mb-6 flex items-center gap-2">
+                            <i class="fa-solid fa-wand-magic-sparkles text-secondary"></i> Generate licenses
+                        </h2>
+                        <form id="generateForm" class="space-y-5">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Product type</label>
+                                <select id="productType" class="w-full bg-dark border border-slate-700 text-white rounded-lg px-4 py-2.5 focus:outline-none focus:border-secondary">
+                                    <option value="colony">Colony Counter</option>
+                                    <option value="cells">Cell Counter</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Quantity</label>
+                                <div class="flex items-center bg-dark border border-slate-700 rounded-lg overflow-hidden">
+                                    <button type="button" onclick="adjustCount(-1)" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border-r border-slate-700"><i class="fa-solid fa-minus text-xs"></i></button>
+                                    <input type="number" id="keyCount" value="5" min="1" max="100" class="flex-1 bg-transparent text-center py-2.5 text-white focus:outline-none">
+                                    <button type="button" onclick="adjustCount(1)" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border-l border-slate-700"><i class="fa-solid fa-plus text-xs"></i></button>
+                                </div>
+                            </div>
+                            <button type="submit" id="generateBtn" class="w-full bg-secondary hover:bg-emerald-500 text-white font-medium py-3 rounded-lg transition-colors">
+                                Generate
+                            </button>
+                        </form>
+                        <div id="generateResult" class="mt-4 p-3 rounded-lg text-sm hidden"></div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- Detail drawer -->
+    <div id="detailOverlay" class="fixed inset-0 z-40 hidden">
+        <div class="absolute inset-0 bg-black/60" onclick="closeDetail()"></div>
+        <aside class="absolute right-0 top-0 h-full w-full max-w-md glass border-l border-slate-800 flex flex-col shadow-2xl">
+            <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+                <h3 class="font-semibold text-white">License details</h3>
+                <button type="button" onclick="closeDetail()" class="text-slate-400 hover:text-white p-1"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="detailContent" class="flex-1 overflow-y-auto p-5 space-y-4 text-sm"></div>
+            <div class="p-5 border-t border-slate-800 flex flex-wrap gap-2">
+                <button type="button" id="detailPrintBtn" class="flex-1 min-w-[120px] px-4 py-2.5 rounded-lg border border-slate-600 text-slate-300 hover:text-white hover:border-slate-500 text-sm">
+                    <i class="fa-solid fa-file-pdf mr-1"></i> Print PDF
+                </button>
+                <button type="button" id="detailDeleteBtn" class="flex-1 min-w-[120px] px-4 py-2.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 text-sm">
+                    <i class="fa-solid fa-trash mr-1"></i> Delete key
+                </button>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Delete confirm -->
+    <div id="deleteModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/70">
+        <div class="glass rounded-xl p-6 max-w-md w-full">
+            <h3 class="text-lg font-semibold text-white">Delete license?</h3>
+            <p class="text-slate-400 text-sm mt-2">This permanently removes <span id="deleteKeyLabel" class="font-mono text-white"></span>. This cannot be undone.</p>
+            <div class="mt-6 flex gap-3 justify-end">
+                <button type="button" onclick="closeDeleteModal()" class="px-4 py-2 rounded-lg border border-slate-600 text-slate-300 hover:text-white text-sm">Cancel</button>
+                <button type="button" id="confirmDeleteBtn" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- New keys modal -->
+    <div id="newKeysModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/70">
+        <div class="glass rounded-xl p-6 max-w-lg w-full max-h-[80vh] flex flex-col">
+            <h3 id="newKeysModalTitle" class="font-semibold text-white">Keys generated</h3>
+            <div id="newKeysList" class="mt-4 space-y-2 overflow-y-auto flex-1 pr-1"></div>
+            <button type="button" onclick="closeNewKeysModal()" class="mt-4 self-end px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Done</button>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 hidden px-4 py-3 rounded-lg glass border border-slate-700 text-sm text-white shadow-xl max-w-sm"></div>
+
+    <script>
+        let adminSecret = '';
+        let allLicenses = [];
+        let selectedLicenseKey = null;
+        let pendingDeleteKey = null;
+
+        const authOverlay = document.getElementById('authOverlay');
+        const appShell = document.getElementById('appShell');
+        const authForm = document.getElementById('authForm');
+        const authError = document.getElementById('authError');
+        const licenseTableBody = document.getElementById('licenseTableBody');
+
+        const storedSecret = sessionStorage.getItem('incucount_admin_secret');
+        if (storedSecret) {
+            adminSecret = storedSecret;
+            verifyAndLoad();
+        }
+
+        authForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            adminSecret = document.getElementById('adminSecretInput').value.trim();
+            verifyAndLoad();
+        });
+
+        document.querySelectorAll('.nav-btn, .mobile-nav-btn').forEach((btn) => {
+            btn.addEventListener('click', () => showPanel(btn.dataset.panel));
+        });
+
+        ['searchInput', 'filterRegistration', 'filterProduct', 'filterDownload'].forEach((id) => {
+            document.getElementById(id).addEventListener('input', renderDashboard);
+            document.getElementById(id).addEventListener('change', renderDashboard);
+        });
+
+        document.getElementById('generateForm').addEventListener('submit', handleGenerate);
+        document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDelete);
+
+        const SIDEBAR_STORAGE_KEY = 'incucount_sidebar_state';
+        const tabletMq = window.matchMedia('(max-width: 1023px)');
+
+        function isTabletViewport() {
+            return tabletMq.matches;
+        }
+
+        function getSidebarState() {
+            const shell = document.getElementById('appShell');
+            if (shell.classList.contains('sidebar-hidden')) return 'hidden';
+            if (shell.classList.contains('sidebar-collapsed')) return 'collapsed';
+            return 'expanded';
+        }
+
+        function updateSidebarChrome() {
+            const shell = document.getElementById('appShell');
+            const state = getSidebarState();
+            const openBtn = document.getElementById('sidebarOpenBtn');
+            const collapseBtn = document.getElementById('sidebarCollapseBtn');
+            const collapseIcon = document.getElementById('sidebarCollapseIcon');
+            const collapseLabel = collapseBtn?.querySelector('.sidebar-label');
+            const backdrop = document.getElementById('sidebarBackdrop');
+
+            const drawerOpen = shell.classList.contains('sidebar-drawer-open');
+            const showMenuBtn = state === 'hidden';
+            openBtn.classList.toggle('hidden', !showMenuBtn);
+            openBtn.classList.toggle('inline-flex', showMenuBtn);
+
+            if (state === 'hidden' && !drawerOpen) {
+                collapseBtn.classList.add('hidden');
+            } else {
+                collapseBtn.classList.remove('hidden');
+            }
+
+            if (state === 'expanded' || drawerOpen) {
+                collapseIcon.className = 'fa-solid fa-angles-left';
+                if (collapseLabel) collapseLabel.textContent = isTabletViewport() ? 'Collapse' : 'Collapse';
+                collapseBtn.title = 'Collapse sidebar';
+            } else {
+                collapseIcon.className = 'fa-solid fa-angles-right';
+                if (collapseLabel) collapseLabel.textContent = 'Expand';
+                collapseBtn.title = 'Expand sidebar';
+            }
+
+            const showBackdrop = drawerOpen && state === 'hidden';
+            backdrop.classList.toggle('hidden', !showBackdrop);
+            backdrop.classList.toggle('opacity-0', !showBackdrop);
+            backdrop.classList.toggle('pointer-events-none', !showBackdrop);
+        }
+
+        function applySidebarState(state, persist = true) {
+            const shell = document.getElementById('appShell');
+            shell.classList.remove('sidebar-expanded', 'sidebar-collapsed', 'sidebar-hidden', 'sidebar-drawer-open');
+            shell.classList.add('sidebar-' + state);
+            if (persist) sessionStorage.setItem(SIDEBAR_STORAGE_KEY, state);
+            updateSidebarChrome();
+        }
+
+        function initSidebar() {
+            const saved = sessionStorage.getItem(SIDEBAR_STORAGE_KEY);
+            const valid = ['expanded', 'collapsed', 'hidden'];
+            let state = valid.includes(saved) ? saved : (isTabletViewport() ? 'collapsed' : 'expanded');
+            if (!isTabletViewport() && state === 'hidden') state = 'collapsed';
+            applySidebarState(state, false);
+        }
+
+        function closeSidebarDrawer() {
+            const shell = document.getElementById('appShell');
+            shell.classList.remove('sidebar-drawer-open');
+            updateSidebarChrome();
+        }
+
+        function openSidebarDrawer() {
+            const shell = document.getElementById('appShell');
+            if (getSidebarState() === 'hidden') {
+                shell.classList.add('sidebar-drawer-open');
+            } else {
+                applySidebarState('expanded');
+            }
+            updateSidebarChrome();
+        }
+
+        function toggleSidebar() {
+            const shell = document.getElementById('appShell');
+            if (shell.classList.contains('sidebar-drawer-open')) {
+                closeSidebarDrawer();
+                return;
+            }
+            const state = getSidebarState();
+            if (isTabletViewport()) {
+                if (state === 'expanded') applySidebarState('collapsed');
+                else if (state === 'collapsed') applySidebarState('hidden');
+                else applySidebarState('expanded');
+            } else {
+                applySidebarState(state === 'expanded' ? 'collapsed' : 'expanded');
+            }
+        }
+
+        tabletMq.addEventListener('change', () => {
+            const state = getSidebarState();
+            if (!isTabletViewport() && state === 'hidden') applySidebarState('collapsed');
+            updateSidebarChrome();
+        });
+
+        function showPanel(name) {
+            const isDash = name === 'dashboard';
+            document.getElementById('panelDashboard').classList.toggle('hidden', !isDash);
+            document.getElementById('panelGenerate').classList.toggle('hidden', isDash);
+            document.getElementById('pageTitle').textContent = isDash ? 'License dashboard' : 'Generate keys';
+            document.querySelectorAll('.nav-btn').forEach((btn) => {
+                const active = btn.dataset.panel === name;
+                const label = btn.dataset.panel === 'dashboard' ? 'Dashboard' : 'Generate keys';
+                btn.className = active
+                    ? 'nav-btn w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary/15 text-primary border border-primary/20'
+                    : 'nav-btn w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors';
+                btn.title = label;
+            });
+            if (isTabletViewport() && getSidebarState() === 'hidden') closeSidebarDrawer();
+            document.querySelectorAll('.mobile-nav-btn').forEach((btn) => {
+                const active = btn.dataset.panel === name;
+                btn.className = active
+                    ? 'mobile-nav-btn flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-[10px] font-medium text-primary bg-primary/10'
+                    : 'mobile-nav-btn flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-[10px] font-medium text-slate-500 hover:text-white';
+            });
+        }
+
+        function logout() {
+            sessionStorage.removeItem('incucount_admin_secret');
+            adminSecret = '';
+            appShell.classList.add('hidden');
+            authOverlay.classList.remove('hidden');
+            authError.classList.add('hidden');
+        }
+
+        async function verifyAndLoad() {
+            try {
+                const res = await fetch(`/api/license/list?adminSecret=${encodeURIComponent(adminSecret)}`);
+                const data = await res.json();
+                if (!data.success) {
+                    logout();
+                    authError.textContent = data.message || 'Invalid secret.';
+                    authError.classList.remove('hidden');
+                    return;
+                }
+                sessionStorage.setItem('incucount_admin_secret', adminSecret);
+                authOverlay.classList.add('hidden');
+                appShell.classList.remove('hidden');
+                initSidebar();
+                allLicenses = data.licenses;
+                renderDashboard();
+            } catch {
+                authError.textContent = 'Could not connect to server.';
+                authError.classList.remove('hidden');
+            }
+        }
+
+        async function fetchLicenses() {
+            const icon = document.getElementById('refreshIcon');
+            icon.classList.add('fa-spin');
+            try {
+                const res = await fetch(`/api/license/list?adminSecret=${encodeURIComponent(adminSecret)}`);
+                const data = await res.json();
+                if (data.success) {
+                    allLicenses = data.licenses;
+                    renderDashboard();
+                    if (selectedLicenseKey) openDetail(selectedLicenseKey);
+                } else if (res.status === 403) logout();
+            } finally {
+                setTimeout(() => icon.classList.remove('fa-spin'), 400);
+            }
+        }
+
+        function escapeHtml(str) {
+            if (str == null) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function formatDate(val) {
+            if (!val) return '—';
+            return new Date(val).toLocaleString(undefined, {
+                year: 'numeric', month: 'short', day: 'numeric',
+                hour: '2-digit', minute: '2-digit',
+            });
+        }
+
+        function isRegistered(l) {
+            return !!l.deviceFingerprint;
+        }
+
+        function isDownloaded(l) {
+            return !!l.downloadRedeemedAt;
+        }
+
+        function isDownloadPending(l) {
+            if (!l.downloadPendingUntil) return false;
+            return new Date(l.downloadPendingUntil) > new Date();
+        }
+
+        function updateStats() {
+            const total = allLicenses.length;
+            const registered = allLicenses.filter(isRegistered).length;
+            const downloaded = allLicenses.filter(isDownloaded).length;
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statAvailable').textContent = total - registered;
+            document.getElementById('statRegistered').textContent = registered;
+            document.getElementById('statDownloaded').textContent = downloaded;
+        }
+
+        function getFilteredLicenses() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const regFilter = document.getElementById('filterRegistration').value;
+            const prodFilter = document.getElementById('filterProduct').value;
+            const dlFilter = document.getElementById('filterDownload').value;
+
+            return allLicenses.filter((l) => {
+                const deviceStr = l.deviceFingerprint || '';
+                const deviceInfoStr = l.deviceInfo ? JSON.stringify(l.deviceInfo) : '';
+                const matchSearch =
+                    l.licenseKey.toLowerCase().includes(search) ||
+                    l.productType.toLowerCase().includes(search) ||
+                    deviceStr.toLowerCase().includes(search) ||
+                    deviceInfoStr.toLowerCase().includes(search);
+                if (!matchSearch) return false;
+
+                const used = isRegistered(l);
+                if (regFilter === 'available' && used) return false;
+                if (regFilter === 'used' && !used) return false;
+                if (prodFilter !== 'all' && l.productType !== prodFilter) return false;
+                if (dlFilter === 'downloaded' && !isDownloaded(l)) return false;
+                if (dlFilter === 'not_downloaded' && isDownloaded(l)) return false;
+                return true;
+            });
+        }
+
+        function badge(html) {
+            return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap">${html}</span>`;
+        }
+
+        function renderDashboard() {
+            updateStats();
+            const filtered = getFilteredLicenses();
+
+            if (filtered.length === 0) {
+                licenseTableBody.innerHTML = `
+                    <tr><td colspan="6" class="px-6 py-16 text-center text-slate-500">
+                        <i class="fa-solid fa-inbox text-3xl mb-3 opacity-40 block"></i>
+                        No licenses match your filters.
+                    </td></tr>`;
+                return;
+            }
+
+            licenseTableBody.innerHTML = filtered.map((l) => {
+                const regBadge = isRegistered(l)
+                    ? badge('<span class="w-1.5 h-1.5 rounded-full bg-blue-400 mr-1.5"></span>Registered')
+                    : badge('<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5"></span>Available');
+
+                let dlBadge;
+                if (isDownloaded(l)) {
+                    dlBadge = badge('<span class="text-amber-400 border-amber-500/30 bg-amber-500/10">Downloaded</span>');
+                } else if (isDownloadPending(l)) {
+                    dlBadge = badge('<span class="text-yellow-400 border-yellow-500/30 bg-yellow-500/10">In progress</span>');
+                } else {
+                    dlBadge = badge('<span class="text-slate-500 border-slate-600 bg-slate-800/50">Not used</span>');
+                }
+
+                const prodClass = l.productType === 'colony'
+                    ? 'text-blue-400 bg-blue-500/10 border-blue-500/20'
+                    : 'text-purple-400 bg-purple-500/10 border-purple-500/20';
+
+                return `
+                    <tr class="hover:bg-slate-800/40 transition-colors">
+                        <td class="px-4 md:px-6 py-3.5">
+                            <span class="font-mono text-white text-xs md:text-sm">${escapeHtml(l.licenseKey)}</span>
+                        </td>
+                        <td class="px-4 md:px-6 py-3.5">
+                            <span class="capitalize px-2 py-0.5 rounded text-xs border ${prodClass}">${escapeHtml(l.productType)}</span>
+                        </td>
+                        <td class="px-4 md:px-6 py-3.5">${regBadge}</td>
+                        <td class="px-4 md:px-6 py-3.5">${dlBadge}</td>
+                        <td class="px-4 md:px-6 py-3.5 text-slate-400 text-xs whitespace-nowrap">${formatDate(l.createdAt)}</td>
+                        <td class="px-4 md:px-6 py-3.5 text-right whitespace-nowrap">
+                            <button type="button" data-key="${escapeHtml(l.licenseKey)}" class="view-btn text-primary hover:text-blue-300 px-2 py-1" title="View details">
+                                <i class="fa-solid fa-circle-info"></i>
+                            </button>
+                            <button type="button" data-key="${escapeHtml(l.licenseKey)}" class="copy-btn text-slate-500 hover:text-white px-2 py-1" title="Copy key">
+                                <i class="fa-regular fa-copy"></i>
+                            </button>
+                            <button type="button" data-key="${escapeHtml(l.licenseKey)}" class="delete-btn text-red-400/80 hover:text-red-400 px-2 py-1" title="Delete">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>`;
+            }).join('');
+
+            licenseTableBody.querySelectorAll('.view-btn').forEach((b) =>
+                b.addEventListener('click', () => openDetail(b.dataset.key)));
+            licenseTableBody.querySelectorAll('.copy-btn').forEach((b) =>
+                b.addEventListener('click', () => copyKey(b.dataset.key)));
+            licenseTableBody.querySelectorAll('.delete-btn').forEach((b) =>
+                b.addEventListener('click', () => promptDelete(b.dataset.key)));
+        }
+
+        function detailRow(label, value, mono = false) {
+            const valClass = mono ? 'font-mono text-xs break-all text-slate-200' : 'text-slate-200';
+            return `
+                <div class="grid grid-cols-[120px_1fr] gap-3 py-2 border-b border-slate-800/80">
+                    <span class="text-slate-500 text-xs uppercase tracking-wide">${escapeHtml(label)}</span>
+                    <span class="${valClass}">${value}</span>
+                </div>`;
+        }
+
+        function openDetail(licenseKey) {
+            const l = allLicenses.find((x) => x.licenseKey === licenseKey);
+            if (!l) return;
+            selectedLicenseKey = licenseKey;
+
+            let deviceInfoBlock = '—';
+            if (l.deviceInfo) {
+                try {
+                    deviceInfoBlock = `<pre class="font-mono text-xs text-slate-300 bg-dark p-3 rounded-lg overflow-x-auto border border-slate-800">${escapeHtml(JSON.stringify(l.deviceInfo, null, 2))}</pre>`;
+                } catch {
+                    deviceInfoBlock = escapeHtml(String(l.deviceInfo));
+                }
+            }
+
+            document.getElementById('detailContent').innerHTML = `
+                ${detailRow('License key', escapeHtml(l.licenseKey), true)}
+                ${detailRow('Product', escapeHtml(l.productType))}
+                ${detailRow('Mongo ID', escapeHtml(l._id), true)}
+                ${detailRow('Registration', isRegistered(l) ? 'Registered to device' : 'Not registered')}
+                ${detailRow('Device fingerprint', l.deviceFingerprint ? escapeHtml(l.deviceFingerprint) : '—', true)}
+                ${detailRow('Registered at', formatDate(l.registeredAt))}
+                ${detailRow('Installer download', isDownloaded(l) ? 'Redeemed' : (isDownloadPending(l) ? 'Pending (in progress)' : 'Not redeemed'))}
+                ${detailRow('Download redeemed', formatDate(l.downloadRedeemedAt))}
+                ${detailRow('Download pending until', formatDate(l.downloadPendingUntil))}
+                ${detailRow('Created', formatDate(l.createdAt))}
+                ${detailRow('Updated', formatDate(l.updatedAt))}
+                <div class="pt-2">
+                    <p class="text-xs uppercase tracking-wide text-slate-500 mb-2">Device info</p>
+                    ${deviceInfoBlock}
+                </div>`;
+
+            document.getElementById('detailPrintBtn').onclick = () => {
+                window.open(`/KeyTemplate.html?key=${encodeURIComponent(l.licenseKey)}`, '_blank');
+            };
+            document.getElementById('detailDeleteBtn').onclick = () => promptDelete(l.licenseKey);
+
+            document.getElementById('detailOverlay').classList.remove('hidden');
+        }
+
+        function closeDetail() {
+            document.getElementById('detailOverlay').classList.add('hidden');
+            selectedLicenseKey = null;
+        }
+
+        function promptDelete(licenseKey) {
+            pendingDeleteKey = licenseKey;
+            document.getElementById('deleteKeyLabel').textContent = licenseKey;
+            const modal = document.getElementById('deleteModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeDeleteModal() {
+            pendingDeleteKey = null;
+            const modal = document.getElementById('deleteModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        async function confirmDelete() {
+            if (!pendingDeleteKey) return;
+            const key = pendingDeleteKey;
+            document.getElementById('confirmDeleteBtn').disabled = true;
+            try {
+                const res = await fetch(
+                    `/api/license/${encodeURIComponent(key)}?adminSecret=${encodeURIComponent(adminSecret)}`,
+                    { method: 'DELETE' }
+                );
+                const data = await res.json();
+                if (data.success) {
+                    showToast('License deleted.');
+                    closeDeleteModal();
+                    closeDetail();
+                    await fetchLicenses();
+                } else {
+                    showToast(data.message || 'Delete failed.', true);
+                    if (res.status === 403) logout();
+                }
+            } catch {
+                showToast('Network error.', true);
+            } finally {
+                document.getElementById('confirmDeleteBtn').disabled = false;
+            }
+        }
+
+        function copyKey(text) {
+            navigator.clipboard.writeText(text).then(() => showToast('Key copied to clipboard.'));
+        }
+
+        function showToast(msg, isError = false) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = `fixed bottom-20 md:bottom-6 right-4 md:right-6 z-[60] px-4 py-3 rounded-lg glass border text-sm shadow-xl max-w-sm ${isError ? 'border-red-500/40 text-red-300' : 'border-slate-700 text-white'}`;
+            t.classList.remove('hidden');
+            clearTimeout(showToast._timer);
+            showToast._timer = setTimeout(() => t.classList.add('hidden'), 2800);
+        }
+
+        const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        function randomSegment(len = 4) {
+            let seg = '';
+            for (let i = 0; i < len; i++) seg += CHARS[Math.floor(Math.random() * CHARS.length)];
+            return seg;
+        }
+        function generateKey() {
+            return [randomSegment(), randomSegment(), randomSegment(), randomSegment()].join('-');
+        }
+        function adjustCount(delta) {
+            const el = document.getElementById('keyCount');
+            let v = parseInt(el.value, 10) || 1;
+            v = Math.min(100, Math.max(1, v + delta));
+            el.value = v;
+        }
+
+        async function handleGenerate(e) {
+            e.preventDefault();
+            const btn = document.getElementById('generateBtn');
+            const result = document.getElementById('generateResult');
+            const type = document.getElementById('productType').value;
+            const count = parseInt(document.getElementById('keyCount').value, 10) || 1;
+            const keys = Array.from({ length: count }, () => ({ licenseKey: generateKey(), productType: type }));
+
+            btn.disabled = true;
+            btn.textContent = 'Generating…';
+            try {
+                const res = await fetch('/api/license/seed', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ adminSecret, keys }),
+                });
+                const data = await res.json();
+                result.classList.remove('hidden');
+                if (data.success) {
+                    result.className = 'mt-4 p-3 rounded-lg text-sm bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+                    result.textContent = `Created ${data.inserted.length} key(s).`;
+                    showNewKeysModal(data.inserted);
+                    showPanel('dashboard');
+                    await fetchLicenses();
+                } else {
+                    result.className = 'mt-4 p-3 rounded-lg text-sm bg-red-500/10 text-red-400 border border-red-500/20';
+                    result.textContent = data.message || 'Failed.';
+                    if (res.status === 403) logout();
+                }
+            } catch {
+                showToast('Network error.', true);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate';
+            }
+        }
+
+        function showNewKeysModal(keys) {
+            document.getElementById('newKeysModalTitle').textContent = `${keys.length} key(s) generated`;
+            document.getElementById('newKeysList').innerHTML = keys.map((k) => `
+                <div class="flex items-center justify-between bg-dark border border-slate-800 p-3 rounded-lg">
+                    <span class="font-mono text-sm">${escapeHtml(k)}</span>
+                    <button type="button" class="text-slate-400 hover:text-primary text-sm" data-copy="${escapeHtml(k)}"><i class="fa-regular fa-copy"></i></button>
+                </div>`).join('');
+            document.getElementById('newKeysList').querySelectorAll('[data-copy]').forEach((b) =>
+                b.addEventListener('click', () => copyKey(b.dataset.copy)));
+            const m = document.getElementById('newKeysModal');
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+        }
+        function closeNewKeysModal() {
+            const m = document.getElementById('newKeysModal');
+            m.classList.add('hidden');
+            m.classList.remove('flex');
+        }
+    </script>
+</body>
+</html>
