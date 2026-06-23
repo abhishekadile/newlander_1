@@ -3,9 +3,16 @@ node_modules
 uploads/
 
 # new_system — large binary / generated artifacts
-new_system/data/
+# Ignore contents of data/ but not the license file
+new_system/data/*
+!new_system/data/LICENSES.md
 new_system/runs/
 new_system/weights/
 
+# Temporary diagnostic / one-off scripts (root-level _*.py)
+_*.py
+temp_preprocessing/
+
 # macOS metadata
 .DS_Store
+Thumbs.db

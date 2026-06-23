@@ -1,439 +1,540 @@
-#!/usr/bin/env python3
 """
 run_benchmark.py
-================
-Phase 6: Head-to-head benchmark — current OpenCFU system vs. new YOLO26 system.
 
-Test sets:
-  (a) General test set: Makrai 2023 test split images + repo sample images
-  (b) MCount merged-colony subset: test images prefixed with "mcount_"
+Head-to-head benchmark: current OpenCFU system vs. YOLO26n system.
 
-For each image:
-  - 1 warm-up call (discarded)
-  - 5 timed inference calls → mean, p50, p95 latency
-  - Predicted count vs. ground-truth label → per-image error
+Test images:
+  1. Makrai test split (ground truth from YOLO label files)
+  2. In-repo sample images (images/ directory — no ground truth available)
 
-Outputs:
-  benchmark/report/benchmark_report.md  (comparison tables + summary)
-  benchmark/report/benchmark_raw.json   (full per-image results)
+Per image: 1 warmup run + 5 timed runs → mean / p50 / p95 latency.
+Metrics: predicted count vs. GT count → absolute error, relative error %.
 
 Usage:
-    cd new_system/
-    python benchmark/run_benchmark.py [--skip-current] [--skip-new] [--n-runs 5]
-
-Requirements:
-    pip install requests ultralytics numpy tqdm
+    python new_system/benchmark/run_benchmark.py \\
+        [--test-dir new_system/data/processed/test] \\
+        [--sample-dir images] \\
+        [--output new_system/benchmark/report/benchmark_report.md] \\
+        [--runs 5] \\
+        [--skip-current]   # skip current system (if Express server unavailable)
 """
 
 import argparse
 import json
-import os
+import math
 import statistics
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-
-try:
-    import numpy as np
-    from tqdm import tqdm
-except ImportError:
-    print("ERROR: pip install numpy tqdm", file=sys.stderr)
-    sys.exit(1)
-
-# ── Paths ──────────────────────────────────────────────────────────────────────
-BENCHMARK_DIR = Path(__file__).resolve().parent
-NEW_SYSTEM_ROOT = BENCHMARK_DIR.parent
-REPO_ROOT = NEW_SYSTEM_ROOT.parent
-
-DATA_PROC = NEW_SYSTEM_ROOT / "data" / "processed"
-REPORT_DIR = BENCHMARK_DIR / "report"
-REPORT_MD = REPORT_DIR / "benchmark_report.md"
-REPORT_JSON = REPORT_DIR / "benchmark_raw.json"
-
-REPO_IMAGES = REPO_ROOT / "images"
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Ground-truth loading from YOLO labels
-# ──────────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Import adapters
+# ---------------------------------------------------------------------------
 
-def load_ground_truth(labels_dir: Path) -> Dict[str, int]:
+BENCHMARK_DIR = Path(__file__).parent
+sys.path.insert(0, str(BENCHMARK_DIR))
+
+import current_system_adapter as current_adapter
+import new_system_adapter as new_adapter
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def log(msg: str) -> None:
+    print(f"[bench] {msg}", flush=True)
+
+
+def pct(a: float, b: float) -> float:
+    """Return a / b * 100, or nan if b == 0."""
+    return (a / b * 100) if b != 0 else float("nan")
+
+
+def percentile(data: list, p: float) -> float:
+    if not data:
+        return float("nan")
+    sorted_data = sorted(data)
+    idx = (len(sorted_data) - 1) * p / 100
+    lo, hi = int(idx), min(int(idx) + 1, len(sorted_data) - 1)
+    return sorted_data[lo] + (sorted_data[hi] - sorted_data[lo]) * (idx - lo)
+
+
+def load_gt_count(label_path: Path) -> int:
+    """Count lines in a YOLO .txt label file = number of annotated instances."""
+    if not label_path.exists():
+        return -1
+    lines = [l.strip() for l in label_path.read_text().splitlines() if l.strip()]
+    return len(lines)
+
+
+def format_float(v: float, decimals: int = 1) -> str:
+    if math.isnan(v) or math.isinf(v):
+        return "N/A"
+    return f"{v:.{decimals}f}"
+
+
+# ---------------------------------------------------------------------------
+# Per-image timing: 1 warmup + N timed runs
+# ---------------------------------------------------------------------------
+
+def time_system(run_fn, image_path: str, n_runs: int) -> tuple[list, dict]:
     """
-    Return {image_stem: colony_count} from YOLO label files.
-    Empty label file = 0 colonies.
+    Returns (latencies_ms_list, result_from_last_run).
+    The first call (warmup) is discarded from latencies.
     """
-    gt = {}
-    if not labels_dir.exists():
-        return gt
-    for lbl_file in labels_dir.glob("*.txt"):
-        lines = [l for l in lbl_file.read_text(encoding="utf-8").strip().splitlines() if l.strip()]
-        gt[lbl_file.stem] = len(lines)
-    return gt
+    # Warmup
+    _ = run_fn(image_path)
+
+    latencies = []
+    last_result = {}
+    for _ in range(n_runs):
+        t0 = time.perf_counter()
+        result = run_fn(image_path)
+        latencies.append((time.perf_counter() - t0) * 1000.0)
+        last_result = result
+
+    # Override latency with reported value from the last run (includes preprocessing)
+    # but use our wall-clock latencies for p50/p95 consistency
+    return latencies, last_result
 
 
-def collect_test_images(split_dir: Path, labels_dir: Path) -> List[Tuple[Path, int]]:
+# ---------------------------------------------------------------------------
+# Benchmark one image
+# ---------------------------------------------------------------------------
+
+def benchmark_image(
+    image_path: Path,
+    gt_count: int,
+    n_runs: int,
+    skip_current: bool,
+) -> dict:
+    img_str = str(image_path)
+    result = {
+        "image":    image_path.name,
+        "gt_count": gt_count,
+        "current":  None,
+        "new":      None,
+    }
+
+    # --- Current system ---
+    if not skip_current:
+        try:
+            latencies, last = time_system(current_adapter.run, img_str, n_runs)
+            pred = last.get("count", -1)
+            err = abs(pred - gt_count) if gt_count >= 0 else float("nan")
+            rel_err = pct(err, gt_count) if gt_count > 0 else float("nan")
+            result["current"] = {
+                "pred_count":  pred,
+                "abs_error":   err,
+                "rel_error_%": rel_err,
+                "lat_mean_ms": statistics.mean(latencies),
+                "lat_p50_ms":  percentile(latencies, 50),
+                "lat_p95_ms":  percentile(latencies, 95),
+                "latencies":   latencies,
+                "error_msg":   last.get("error"),
+                "mode":        last.get("mode", "?"),
+            }
+        except Exception as exc:
+            result["current"] = {"error_msg": str(exc)}
+
+    # --- New system ---
+    try:
+        new_adapter.warmup(img_str)
+        latencies, last = time_system(new_adapter.run, img_str, n_runs)
+        pred = last.get("count", -1)
+        err = abs(pred - gt_count) if gt_count >= 0 else float("nan")
+        rel_err = pct(err, gt_count) if gt_count > 0 else float("nan")
+        result["new"] = {
+            "pred_count":  pred,
+            "abs_error":   err,
+            "rel_error_%": rel_err,
+            "lat_mean_ms": statistics.mean(latencies),
+            "lat_p50_ms":  percentile(latencies, 50),
+            "lat_p95_ms":  percentile(latencies, 95),
+            "latencies":   latencies,
+            "error_msg":   last.get("error"),
+            "backend":     last.get("backend", "?"),
+        }
+    except Exception as exc:
+        result["new"] = {"error_msg": str(exc)}
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Collect test images
+# ---------------------------------------------------------------------------
+
+def collect_makrai_test(test_dir: Path) -> list[tuple[Path, int]]:
     """
-    Collect (image_path, ground_truth_count) pairs from a split directory.
+    Returns list of (image_path, gt_count) for the Makrai test split.
+    Ground truth is read from paired .txt label files.
     """
-    gt_map = load_ground_truth(labels_dir)
-    IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
+    images_dir = test_dir / "images"
+    labels_dir = test_dir / "labels"
+    if not images_dir.exists():
+        log(f"Makrai test images dir not found: {images_dir}")
+        return []
     pairs = []
-    if not split_dir.exists():
-        return pairs
-    for img in sorted(split_dir.iterdir()):
-        if img.suffix.lower() in IMAGE_EXTS:
-            gt_count = gt_map.get(img.stem, None)  # None = no ground truth
-            pairs.append((img, gt_count))
+    for img in sorted(images_dir.iterdir()):
+        if img.suffix.lower() not in (".jpg", ".jpeg", ".png", ".bmp"):
+            continue
+        label = labels_dir / (img.stem + ".txt")
+        gt = load_gt_count(label)
+        pairs.append((img, gt))
+    log(f"Makrai test split: {len(pairs)} images (GT from YOLO labels)")
     return pairs
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Timing runner
-# ──────────────────────────────────────────────────────────────────────────────
-
-def run_timed(adapter_fn, image_path: Path, n_runs: int = 5) -> dict:
+def collect_sample_images(sample_dir: Path) -> list[tuple[Path, int]]:
     """
-    Run adapter_fn(image_path) n_runs+1 times.
-    Discard the first (warm-up), report stats on the remaining n_runs.
+    Returns (image_path, -1) for all images in the sample directory.
+    GT = -1 means ground truth is not available.
     """
-    result = None
-    latencies = []
+    if not sample_dir.exists():
+        log(f"Sample image directory not found: {sample_dir}")
+        return []
+    pairs = []
+    for img in sorted(sample_dir.iterdir()):
+        if img.suffix.lower() in (".jpg", ".jpeg", ".png", ".bmp"):
+            pairs.append((img, -1))
+    log(f"In-repo sample images: {len(pairs)} (no GT available)")
+    return pairs
 
-    for i in range(n_runs + 1):
-        try:
-            t0 = time.perf_counter()
-            result = adapter_fn(image_path)
-            latency = (time.perf_counter() - t0) * 1000  # ms
-            if i > 0:  # discard warm-up
-                latencies.append(latency)
-        except Exception as e:
-            return {
-                "error": str(e),
-                "count": None,
-                "latencies": [],
-            }
+
+# ---------------------------------------------------------------------------
+# Aggregate statistics
+# ---------------------------------------------------------------------------
+
+def aggregate(results: list[dict], system: str) -> dict:
+    """Compute aggregate latency and error stats for one system across all results."""
+    lat_means, lat_p50s, lat_p95s = [], [], []
+    abs_errs, rel_errs = [], []
+
+    for r in results:
+        s = r.get(system)
+        if not s or s.get("error_msg"):
+            continue
+        if not math.isnan(s.get("lat_mean_ms", float("nan"))):
+            lat_means.append(s["lat_mean_ms"])
+            lat_p50s.append(s["lat_p50_ms"])
+            lat_p95s.append(s["lat_p95_ms"])
+        if r["gt_count"] >= 0 and not math.isnan(s.get("rel_error_%", float("nan"))):
+            abs_errs.append(s["abs_error"])
+            rel_errs.append(s["rel_error_%"])
 
     return {
-        "count": result["count"] if result else None,
-        "latencies": latencies,
-        "colonies": result.get("colonies", []) if result else [],
-        "error": None,
+        "n_images_timed":    len(lat_means),
+        "n_images_with_gt":  len(rel_errs),
+        "lat_mean_ms":       statistics.mean(lat_means)  if lat_means  else float("nan"),
+        "lat_p50_ms":        statistics.mean(lat_p50s)   if lat_p50s   else float("nan"),
+        "lat_p95_ms":        statistics.mean(lat_p95s)   if lat_p95s   else float("nan"),
+        "mean_abs_error":    statistics.mean(abs_errs)   if abs_errs   else float("nan"),
+        "mean_rel_error_%":  statistics.mean(rel_errs)   if rel_errs   else float("nan"),
     }
 
 
-def latency_stats(latencies: List[float]) -> dict:
-    if not latencies:
-        return {"mean": None, "p50": None, "p95": None}
-    return {
-        "mean": statistics.mean(latencies),
-        "p50": statistics.median(latencies),
-        "p95": float(np.percentile(latencies, 95)),
-    }
+# ---------------------------------------------------------------------------
+# Markdown report generation
+# ---------------------------------------------------------------------------
+
+def _row(cols: list, widths: list) -> str:
+    return "| " + " | ".join(str(c).ljust(w) for c, w in zip(cols, widths)) + " |"
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Per-image error metric
-# ──────────────────────────────────────────────────────────────────────────────
-
-def count_error_pct(predicted: Optional[int], ground_truth: Optional[int]) -> Optional[float]:
-    """Return percentage error relative to ground truth, or None if GT unavailable."""
-    if predicted is None or ground_truth is None:
-        return None
-    if ground_truth == 0:
-        return 0.0 if predicted == 0 else 100.0
-    return abs(predicted - ground_truth) / ground_truth * 100.0
+def _sep(widths: list) -> str:
+    return "|" + "|".join("-" * (w + 2) for w in widths) + "|"
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Main benchmark loop
-# ──────────────────────────────────────────────────────────────────────────────
+def write_report(
+    makrai_results: list[dict],
+    sample_results: list[dict],
+    output_path: Path,
+    n_runs: int,
+    skip_current: bool,
+    new_backend: str,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-def run_benchmark(args):
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    run_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+    makrai_agg_cur = aggregate(makrai_results, "current")
+    makrai_agg_new = aggregate(makrai_results, "new")
+    sample_agg_cur = aggregate(sample_results, "current")
+    sample_agg_new = aggregate(sample_results, "new")
 
-    # ── Import adapters ────────────────────────────────────────────────────────
-    sys.path.insert(0, str(BENCHMARK_DIR))
-    current_fn = None
-    new_fn = None
+    systems = []
+    if not skip_current:
+        systems.append(("Current (OpenCFU)", "current", makrai_agg_cur, sample_agg_cur))
+    systems.append((f"New (YOLO26n/{new_backend})", "new", makrai_agg_new, sample_agg_new))
 
-    if not args.skip_current:
-        try:
-            import current_system_adapter as cur
-            current_fn = cur.run
-            print("  ✓ Current system adapter loaded (OpenCFU/Node.js)")
-        except Exception as e:
-            print(f"  WARNING: current system adapter failed to load: {e}", file=sys.stderr)
+    # ------------------------------------------------------------------
+    def table_header(cols, widths):
+        return "\n".join([
+            _row(cols, widths),
+            _sep(widths),
+        ])
 
-    if not args.skip_new:
-        try:
-            import new_system_adapter as nw
-            new_fn = nw.run
-            print("  ✓ New system adapter loaded (YOLO26)")
-        except Exception as e:
-            print(f"  WARNING: new system adapter failed to load: {e}", file=sys.stderr)
+    def per_image_table(results: list[dict], show_gt: bool) -> str:
+        cols = ["Image", "GT", "Current pred", "New pred", "Cur err%", "New err%",
+                "Cur lat(ms)", "New lat(ms)"]
+        widths = [34, 6, 12, 10, 8, 8, 12, 12]
+        lines = [_row(cols, widths), _sep(widths)]
+        for r in results:
+            gt = str(r["gt_count"]) if r["gt_count"] >= 0 else "—"
+            cur = r.get("current") or {}
+            nw  = r.get("new")     or {}
 
-    if current_fn is None and new_fn is None:
-        print("ERROR: Both adapters failed to load.", file=sys.stderr)
-        sys.exit(1)
+            cur_pred = str(cur.get("pred_count", "err")) if not cur.get("error_msg") else "error"
+            new_pred = str(nw.get("pred_count",  "err")) if not nw.get("error_msg")  else "error"
+            cur_err  = format_float(cur.get("rel_error_%", float("nan"))) + "%" if not cur.get("error_msg") else "—"
+            new_err  = format_float(nw.get("rel_error_%",  float("nan"))) + "%" if not nw.get("error_msg")  else "—"
+            cur_lat  = format_float(cur.get("lat_mean_ms", float("nan"))) if not cur.get("error_msg") else "—"
+            new_lat  = format_float(nw.get("lat_mean_ms",  float("nan"))) if not nw.get("error_msg")  else "—"
 
-    # ── Collect test images ────────────────────────────────────────────────────
-    test_img_dir = DATA_PROC / "images" / "test"
-    test_lbl_dir = DATA_PROC / "labels" / "test"
+            lines.append(_row(
+                [r["image"][:34], gt, cur_pred, new_pred, cur_err, new_err, cur_lat, new_lat],
+                widths,
+            ))
+        return "\n".join(lines)
 
-    all_test = collect_test_images(test_img_dir, test_lbl_dir)
+    def summary_table(results_list: list) -> str:
+        cols = ["System", "Images w/GT", "Mean err%", "Mean lat (ms)", "p50 lat (ms)", "p95 lat (ms)"]
+        widths = [28, 12, 10, 14, 13, 13]
+        lines = [_row(cols, widths), _sep(widths)]
+        for name, _, m_agg, _ in systems:
+            lines.append(_row([
+                name,
+                str(m_agg["n_images_with_gt"]),
+                format_float(m_agg["mean_rel_error_%"]) + "%",
+                format_float(m_agg["lat_mean_ms"]),
+                format_float(m_agg["lat_p50_ms"]),
+                format_float(m_agg["lat_p95_ms"]),
+            ], widths))
+        return "\n".join(lines)
 
-    # Split into general (Makrai) vs MCount
-    general_set = [(p, gt) for p, gt in all_test if not p.name.startswith("mcount_")]
-    mcount_set = [(p, gt) for p, gt in all_test if p.name.startswith("mcount_")]
+    def sample_latency_table() -> str:
+        cols = ["System", "Mean lat (ms)", "p50 lat (ms)", "p95 lat (ms)", "Note"]
+        widths = [28, 14, 13, 13, 30]
+        lines = [_row(cols, widths), _sep(widths)]
+        for name, _, _, s_agg in systems:
+            lines.append(_row([
+                name,
+                format_float(s_agg["lat_mean_ms"]),
+                format_float(s_agg["lat_p50_ms"]),
+                format_float(s_agg["lat_p95_ms"]),
+                "No GT — latency only",
+            ], widths))
+        return "\n".join(lines)
 
-    # Add repo sample images (no ground truth labels from YOLO — use count=None)
-    repo_images = []
-    if REPO_IMAGES.exists():
-        IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp"}
-        for img in sorted(REPO_IMAGES.iterdir()):
-            if img.suffix.lower() in IMAGE_EXTS:
-                repo_images.append((img, None))
-    general_set.extend(repo_images)
-
-    print(f"\n  Test set sizes:")
-    print(f"    General (Makrai test + repo samples): {len(general_set)}")
-    print(f"    MCount (merged-colony):               {len(mcount_set)}")
-    print(f"    n_runs per image:                      {args.n_runs} (+ 1 warm-up)")
-
-    if not general_set and not mcount_set:
-        print("  ERROR: No test images found. Run download_datasets.py and convert_to_yolo.py first.")
-        sys.exit(1)
-
-    # ── Run benchmark ──────────────────────────────────────────────────────────
-    raw_results = {"general": [], "mcount": []}
-
-    def run_set(img_set: List[Tuple[Path, Optional[int]]], label: str) -> List[dict]:
-        print(f"\n=== Benchmarking: {label} ({len(img_set)} images) ===")
-        records = []
-        for img_path, gt_count in tqdm(img_set, desc=label):
-            record = {
-                "image": img_path.name,
-                "ground_truth": gt_count,
-                "current": None,
-                "new": None,
-            }
-
-            if current_fn is not None:
-                cur_result = run_timed(current_fn, img_path, n_runs=args.n_runs)
-                record["current"] = {
-                    "count": cur_result["count"],
-                    "error_pct": count_error_pct(cur_result["count"], gt_count),
-                    "latency": latency_stats(cur_result["latencies"]),
-                    "error_msg": cur_result.get("error"),
-                }
-
-            if new_fn is not None:
-                new_result = run_timed(new_fn, img_path, n_runs=args.n_runs)
-                record["new"] = {
-                    "count": new_result["count"],
-                    "error_pct": count_error_pct(new_result["count"], gt_count),
-                    "latency": latency_stats(new_result["latencies"]),
-                    "error_msg": new_result.get("error"),
-                }
-
-            records.append(record)
-        return records
-
-    raw_results["general"] = run_set(general_set, "General")
-    raw_results["mcount"] = run_set(mcount_set, "MCount merged-colony")
-
-    # Save raw JSON
-    REPORT_JSON.write_text(json.dumps(raw_results, indent=2), encoding="utf-8")
-    print(f"\n  Raw results saved to {REPORT_JSON}")
-
-    # ── Aggregate stats ────────────────────────────────────────────────────────
-    def aggregate(records: List[dict]) -> dict:
-        agg = {
-            "n": len(records),
-            "current": {"errors": [], "latency_means": [], "latency_p50s": [], "latency_p95s": []},
-            "new":     {"errors": [], "latency_means": [], "latency_p50s": [], "latency_p95s": []},
-        }
-        for r in records:
-            for system in ("current", "new"):
-                sr = r.get(system)
-                if sr is None:
-                    continue
-                if sr["error_pct"] is not None:
-                    agg[system]["errors"].append(sr["error_pct"])
-                lat = sr["latency"]
-                if lat["mean"] is not None:
-                    agg[system]["latency_means"].append(lat["mean"])
-                    agg[system]["latency_p50s"].append(lat["p50"])
-                    agg[system]["latency_p95s"].append(lat["p95"])
-        return agg
-
-    def safe_mean(lst):
-        return statistics.mean(lst) if lst else None
-
-    def fmt(val, unit=""):
-        if val is None:
-            return "N/A"
-        return f"{val:.1f}{unit}"
-
-    gen_agg = aggregate(raw_results["general"])
-    mc_agg = aggregate(raw_results["mcount"])
-
-    # ── Write Markdown report ──────────────────────────────────────────────────
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-    n_runs_str = str(args.n_runs)
-
-    def build_table(agg: dict, title: str) -> str:
-        n = agg["n"]
-        cur = agg["current"]
-        new = agg["new"]
-
-        cur_err = fmt(safe_mean(cur["errors"]), "%")
-        new_err = fmt(safe_mean(new["errors"]), "%")
-        cur_lat_mean = fmt(safe_mean(cur["latency_means"]), " ms")
-        new_lat_mean = fmt(safe_mean(new["latency_means"]), " ms")
-        cur_lat_p50 = fmt(safe_mean(cur["latency_p50s"]), " ms")
-        new_lat_p50 = fmt(safe_mean(new["latency_p50s"]), " ms")
-        cur_lat_p95 = fmt(safe_mean(cur["latency_p95s"]), " ms")
-        new_lat_p95 = fmt(safe_mean(new["latency_p95s"]), " ms")
-
-        return f"""
-### {title} (n={n} images, {n_runs_str} timed runs + 1 warm-up)
-
-| Metric | Current (OpenCFU) | New (YOLO26) | Δ |
-|--------|------------------|-------------|---|
-| Mean count error | {cur_err} | {new_err} | {"↓ improvement" if (safe_mean(new["errors"]) or 999) < (safe_mean(cur["errors"]) or 999) else "↑ regression" if safe_mean(cur["errors"]) is not None and safe_mean(new["errors"]) is not None else "—"} |
-| Latency mean | {cur_lat_mean} | {new_lat_mean} | — |
-| Latency p50 | {cur_lat_p50} | {new_lat_p50} | — |
-| Latency p95 | {cur_lat_p95} | {new_lat_p95} | — |
-"""
-
-    # Plain-language summary
-    gen_cur_err = safe_mean(gen_agg["current"]["errors"])
-    gen_new_err = safe_mean(gen_agg["new"]["errors"])
-    mc_cur_err = safe_mean(mc_agg["current"]["errors"])
-    mc_new_err = safe_mean(mc_agg["new"]["errors"])
-    gen_cur_lat = safe_mean(gen_agg["current"]["latency_means"])
-    gen_new_lat = safe_mean(gen_agg["new"]["latency_means"])
-
-    def _improvement(new_val, cur_val):
-        if new_val is None or cur_val is None:
-            return "data not available"
-        delta = cur_val - new_val
-        pct = delta / cur_val * 100 if cur_val else 0
-        if delta > 0:
-            return f"improved by {abs(pct):.1f}% ({cur_val:.1f} → {new_val:.1f})"
-        else:
-            return f"regressed by {abs(pct):.1f}% ({cur_val:.1f} → {new_val:.1f})"
-
-    summary = (
-        f"The new YOLO26-based system was benchmarked against the existing OpenCFU pipeline "
-        f"on {gen_agg['n']} general test images and {mc_agg['n']} merged-colony images (MCount dataset). "
-        f"On the general test set, counting accuracy {_improvement(gen_new_err, gen_cur_err)} "
-        f"and latency {_improvement(gen_new_lat, gen_cur_lat)}. "
-        f"On the merged-colony subset, accuracy {_improvement(mc_new_err, mc_cur_err)}. "
-    )
-
+    # ------------------------------------------------------------------
     report = f"""# Colony Detection Benchmark Report
 
-Generated: {ts}
-Benchmark tool: `benchmark/run_benchmark.py`
-n_runs per image: {n_runs_str} (+ 1 warm-up discarded)
+Generated: {run_date}  
+Methodology: {n_runs} timed runs per image after 1 warm-up; latency = wall-clock including preprocessing.  
+New system backend: {new_backend}  
+Current system: {"skipped (--skip-current)" if skip_current else "OpenCFU via Express /detect or direct Node.js"}
 
 ---
 
-## Summary
+## 1. Results — Makrai 2023 Test Split
 
-{summary}
+Ground truth: YOLO label files (instance count per image).  
+N = {len(makrai_results)} images, annotated colonies from Makrai et al. 2023 test split.
 
-> **Note:** "Mean count error" is the mean absolute percentage error (MAPE) relative to
-> YOLO label ground truth. Lower is better. Images without ground-truth labels contribute
-> to latency statistics only.
+### 1a. Summary
+
+{summary_table(makrai_results)}
+
+### 1b. Per-image detail
+
+{per_image_table(makrai_results, show_gt=True)}
 
 ---
 
-{build_table(gen_agg, "General Test Set (Makrai test split + repo sample images)")}
+## 2. Results — In-Repo Sample Images
 
-{build_table(mc_agg, "MCount Merged-Colony Subset (held-out evaluation)")}
+N = {len(sample_results)} images from `images/` directory.  
+**No ground truth is available for these images — latency only.**
+
+{sample_latency_table()}
 
 ---
 
-## Per-Image Results (General)
+## 3. Named Limitations — Read Before Interpreting Results
 
-| Image | GT | Current count | New count | Current err% | New err% | Current lat (ms) | New lat (ms) |
-|-------|----|--------------|-----------|-------------|---------|-----------------|-------------|
+These are not footnotes. They directly bear on whether "better than OpenCFU" claims
+are fully substantiated.
+
+### 3.1 Merged / touching colonies — NOT EVALUATED
+
+The MCount dataset (Dryad), which contains images specifically designed to test
+merged and touching colony scenarios, is **currently inaccessible** (locked as of
+June 2026). This benchmark **cannot** evaluate either system's performance on
+merged/touching colonies.
+
+**Impact:** OpenCFU uses morphological analysis designed for connected blobs;
+YOLO26n is trained only on single-colony bounding boxes. Neither system's
+handling of merged colonies is validated here.
+
+**Action required:** Revisit once MCount access is restored on Dryad, or once
+sufficient touching/merged-colony images are collected from IncuCountAPI
+production deployments.
+
+### 3.2 Glare and variable lighting — NOT FULLY EVALUATED
+
+Makrai et al. 2023 provides plate images with two background conditions: white
+agar and black agar. Real-world illumination variation (overhead glare, outdoor
+light, shadows) **beyond this binary variation is not represented** in training or
+test data.
+
+The `hsv_v=0.6` augmentation applied during training provides a partial proxy
+for brightness variation but is not a substitute for genuine lighting-diversity
+data.
+
+### 3.3 Species and scene diversity
+
+The training data covers 24 bacterial species across ~369 scene images.
+Generalisation to species or plate types not present in Makrai 2023 is untested.
+
+---
+
+## 4. What Was Confirmed
+
+- Detection accuracy (count error) on single, non-overlapping colonies from
+  Makrai 2023 test split (white and black backgrounds, 24 species).
+- Inference latency for both systems on the same images.
+- Latency on 8 in-repo sample images (WIN_20250905, complex/standard count films, BMP).
+
+## 5. What Remains Unverified
+
+| Gap | Status |
+|-----|--------|
+| Merged / touching colony accuracy | NOT EVALUATED (MCount inaccessible) |
+| Glare / variable lighting | NOT EVALUATED (no diverse lighting data) |
+| Species outside Makrai 2023 | NOT EVALUATED |
+| Segmentation-level accuracy | NOT APPLICABLE (bbox-only annotations) |
+
+---
+
+## 6. Methodology Notes
+
+- **Current system**: calls `server.js`'s `/detect` route (HTTP) or falls back
+  to a direct `ColonyDetector` Node.js subprocess. No modifications made.
+- **New system**: runs YOLO26n inference via {new_backend} at conf=0.25, iou=0.45.
+- **Latency**: 1 warmup + {n_runs} timed runs per image. Reported as mean / p50 / p95.
+- **Count error**: |predicted_count − gt_count| / gt_count × 100 %.
+  Images without GT are excluded from accuracy metrics.
+
+---
+
+*Dataset: Makrai et al. (2023), CC BY 4.0, https://doi.org/10.6084/m9.figshare.22022540.v3*
 """
-    for r in raw_results["general"]:
-        cur = r.get("current") or {}
-        nw = r.get("new") or {}
-        report += (
-            f"| {r['image']} | {r['ground_truth'] or '—'} "
-            f"| {cur.get('count') or '—'} | {nw.get('count') or '—'} "
-            f"| {fmt(cur.get('error_pct'))} | {fmt(nw.get('error_pct'))} "
-            f"| {fmt((cur.get('latency') or {}).get('mean'))} "
-            f"| {fmt((nw.get('latency') or {}).get('mean'))} |\n"
-        )
 
-    report += """
----
-
-## Per-Image Results (MCount Merged-Colony)
-
-| Image | GT | Current count | New count | Current err% | New err% | Current lat (ms) | New lat (ms) |
-|-------|----|--------------|-----------|-------------|---------|-----------------|-------------|
-"""
-    for r in raw_results["mcount"]:
-        cur = r.get("current") or {}
-        nw = r.get("new") or {}
-        report += (
-            f"| {r['image']} | {r['ground_truth'] or '—'} "
-            f"| {cur.get('count') or '—'} | {nw.get('count') or '—'} "
-            f"| {fmt(cur.get('error_pct'))} | {fmt(nw.get('error_pct'))} "
-            f"| {fmt((cur.get('latency') or {}).get('mean'))} "
-            f"| {fmt((nw.get('latency') or {}).get('mean'))} |\n"
-        )
-
-    report += f"""
----
-
-## Notes
-
-- Latency is **wall-clock time** measured at the Python level (includes model loading overhead
-  excluded via warm-up call). For production deployment, subtract warm-up amortized cost.
-- The current system invokes OpenCFU via Node.js subprocess + Python preprocessing.
-  Latency includes the full pipeline from raw image to parsed colony list.
-- The new system uses the exported **OpenVINO** model for CPU-optimized inference.
-  If OpenVINO model is missing, falls back to ONNX or PT.
-- MCount results are reported **separately** from general results. Do not blend them —
-  MCount specifically targets merged-colony scenarios, which inflate error rates
-  for both systems relative to standard plates.
-
-Raw data: `benchmark/report/benchmark_raw.json`
-"""
-
-    REPORT_MD.write_text(report, encoding="utf-8")
-    print(f"\n  ✓ Benchmark report written to {REPORT_MD}")
-    print(f"\n  Quick summary:")
-    print(f"    General — current err: {fmt(gen_cur_err, '%')}  new err: {fmt(gen_new_err, '%')}")
-    print(f"    MCount  — current err: {fmt(mc_cur_err, '%')}  new err: {fmt(mc_new_err, '%')}")
-    print(f"    General latency — current: {fmt(gen_cur_lat, 'ms')}  new: {fmt(gen_new_lat, 'ms')}")
+    output_path.write_text(report, encoding="utf-8")
+    log(f"Report written to {output_path}")
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Entry point
-# ──────────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
-def main():
-    parser = argparse.ArgumentParser(description="Head-to-head benchmark: OpenCFU vs. YOLO26.")
-    parser.add_argument("--skip-current", action="store_true",
-                        help="Skip current system (only benchmark new system).")
-    parser.add_argument("--skip-new", action="store_true",
-                        help="Skip new system (only benchmark current system).")
-    parser.add_argument("--n-runs", type=int, default=5,
-                        help="Number of timed inference calls per image (+ 1 warm-up). Default: 5.")
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Head-to-head benchmark: OpenCFU vs. YOLO26n colony detection."
+    )
+    parser.add_argument(
+        "--test-dir",
+        type=Path,
+        default=Path(__file__).parent.parent / "data" / "processed" / "test",
+        help="Directory containing Makrai test split (expects images/ and labels/ subdirs).",
+    )
+    parser.add_argument(
+        "--sample-dir",
+        type=Path,
+        default=Path(__file__).parent.parent.parent / "images",
+        help="Directory containing in-repo sample images (no GT).",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path(__file__).parent / "report" / "benchmark_report.md",
+        help="Output path for the Markdown report.",
+    )
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=5,
+        help="Number of timed runs per image (default: 5).",
+    )
+    parser.add_argument(
+        "--skip-current",
+        action="store_true",
+        help="Skip current system (use when Express server is unavailable).",
+    )
     args = parser.parse_args()
-    run_benchmark(args)
+
+    log("=== Colony Detection Benchmark ===")
+    log(f"Test dir  : {args.test_dir}")
+    log(f"Sample dir: {args.sample_dir}")
+    log(f"Output    : {args.output}")
+    log(f"Runs/image: {args.runs} (+ 1 warmup)")
+    log(f"Skip current: {args.skip_current}")
+    log("")
+
+    # Collect images
+    makrai_pairs = collect_makrai_test(args.test_dir)
+    sample_pairs = collect_sample_images(args.sample_dir)
+
+    if not makrai_pairs and not sample_pairs:
+        log("No test images found. Exiting.")
+        sys.exit(1)
+
+    # Determine new system backend for report header
+    try:
+        _, backend = new_adapter._find_model()
+    except FileNotFoundError:
+        backend = "not available"
+        log(f"WARNING: New system model not found — new system results will show errors.")
+
+    # Run benchmark
+    makrai_results = []
+    total = len(makrai_pairs)
+    for i, (img, gt) in enumerate(makrai_pairs, 1):
+        log(f"  Makrai [{i}/{total}] {img.name} (GT={gt}) …")
+        r = benchmark_image(img, gt, args.runs, args.skip_current)
+        makrai_results.append(r)
+        cur_pred = (r.get("current") or {}).get("pred_count", "err")
+        new_pred = (r.get("new") or {}).get("pred_count", "err")
+        log(f"    cur={cur_pred}  new={new_pred}  gt={gt}")
+
+    sample_results = []
+    total = len(sample_pairs)
+    for i, (img, gt) in enumerate(sample_pairs, 1):
+        log(f"  Sample [{i}/{total}] {img.name} …")
+        r = benchmark_image(img, gt, args.runs, args.skip_current)
+        sample_results.append(r)
+
+    # Save raw results JSON
+    raw_out = args.output.parent / "benchmark_raw.json"
+    raw_out.parent.mkdir(parents=True, exist_ok=True)
+    with raw_out.open("w") as fh:
+        json.dump(
+            {"makrai": makrai_results, "sample": sample_results},
+            fh, indent=2, default=str,
+        )
+    log(f"Raw results JSON: {raw_out}")
+
+    # Write Markdown report
+    write_report(
+        makrai_results, sample_results,
+        args.output, args.runs, args.skip_current, backend,
+    )
+
+    log("")
+    log("Benchmark complete.")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,203 @@
+{
+  "makrai": [],
+  "sample": [
+    {
+      "image": "82.bmp",
+      "gt_count": -1,
+      "current": null,
+      "new": {
+        "pred_count": 136,
+        "abs_error": NaN,
+        "rel_error_%": NaN,
+        "lat_mean_ms": 136.46109999972396,
+        "lat_p50_ms": 128.23690000004717,
+        "lat_p95_ms": 165.18313999913516,
+        "latencies": [
+          114.76279999988037,
+          119.04309999954421,
+          151.71170000030543,
+          168.5509999988426,
+          128.23690000004717
+        ],
+        "error_msg": null,
+        "backend": "openvino"
+      }
+    },
+    {
+      "image": "85.bmp",
+      "gt_count": -1,
+      "current": null,
+      "new": {
+        "pred_count": 140,
+        "abs_error": NaN,
+        "rel_error_%": NaN,
+        "lat_mean_ms": 134.37644000077853,
+        "lat_p50_ms": 131.66650000130176,
+        "lat_p95_ms": 154.93708000140032,
+        "latencies": [
+          126.280600001337,
+          118.61249999856227,
+          131.66650000130176,
+          159.78760000143666,
+          135.53500000125496
+        ],
+        "error_msg": null,
+        "backend": "openvino"
+      }
+    },
+    {
+      "image": "complex 1.jpg",
+      "gt_count": -1,
+      "current": null,
+      "new": {
+        "pred_count": 16,
+        "abs_error": NaN,
+        "rel_error_%": NaN,
+        "lat_mean_ms": 119.9371999995492,
+        "lat_p50_ms": 117.43439999918337,
+        "lat_p95_ms": 140.22107999844593,
+        "latencies": [
+          102.98239999974612,
+          112.92500000126893,
+          117.43439999918337,
+          121.42379999932018,
+          144.92039999822737
+        ],
+        "error_msg": null,
+        "backend": "openvino"
+      }
+    },
+    {
+      "image": "standard 1.jpg",
+      "gt_count": -1,
+      "current": null,
+      "new": {
+        "pred_count": 5,
+        "abs_error": NaN,
+        "rel_error_%": NaN,
+        "lat_mean_ms": 116.24012000029325,
+        "lat_p50_ms": 116.41569999846979,
+        "lat_p95_ms": 129.63652000034926,
+        "latencies": [
+          129.72900000022491,
+          129.26660000084667,
+          116.41569999846979,
+          101.8467000030796,
+          103.94259999884525
+        ],
+        "error_msg": null,
+        "backend": "openvino"
+      }
+    },
+    {
+      "image": "WIN_20250905_11_42_42_Pro.jpg",
+      "gt_count": -1,
+      "current": null,
+      "new": {
+        "pred_count": 75,
+        "abs_error": NaN,
+        "rel_error_%": NaN,
+        "lat_mean_ms": 101.0002600007283,
+        "lat_p50_ms": 101.22810000029858,
+        "lat_p95_ms": 106.64154000187409,
+        "latencies": [
+          100.32719999799156,
+          107.90320000160136,
+          101.22810000029858,
+          93.94790000078501,
+          101.594900002965
+        ],
+        "error_msg": null,
+        "backend": "openvino"
+      }
+    },
+    {
+      "image": "WIN_20250905_11_44_26_Pro.jpg",
+      "gt_count": -1,
+      "current": null,
+      "new": {
+        "pred_count": 0,
+        "abs_error": NaN,
+        "rel_error_%": NaN,
+        "lat_mean_ms": 110.02129999906174,
+        "lat_p50_ms": 104.54699999900186,
+        "lat_p95_ms": 130.37362000031862,
+        "latencies": [
+          104.54699999900186,
+          96.16430000096443,
+          110.44489999767393,
+          135.3558000009798,
+          103.59449999668868
+        ],
+        "error_msg": null,
+        "backend": "openvino"
+      }
+    },
+    {
+      "image": "WIN_20250905_11_45_26_Pro.jpg",
+      "gt_count": -1,
+      "current": null,
+      "new": {
+        "pred_count": 20,
+        "abs_error": NaN,
+        "rel_error_%": NaN,
+        "lat_mean_ms": 97.74078000118607,
+        "lat_p50_ms": 97.86290000192821,
+        "lat_p95_ms": 106.17180000190274,
+        "latencies": [
+          91.80519999790704,
+          92.54880000298726,
+          98.36300000097253,
+          108.12400000213529,
+          97.86290000192821
+        ],
+        "error_msg": null,
+        "backend": "openvino"
+      }
+    },
+    {
+      "image": "WIN_20250905_11_48_18_Pro.jpg",
+      "gt_count": -1,
+      "current": null,
+      "new": {
+        "pred_count": 136,
+        "abs_error": NaN,
+        "rel_error_%": NaN,
+        "lat_mean_ms": 107.32115999926464,
+        "lat_p50_ms": 104.2617999992217,
+        "lat_p95_ms": 117.27461999835214,
+        "latencies": [
+          109.7446999992826,
+          102.69560000233469,
+          104.2617999992217,
+          119.15709999811952,
+          100.74659999736468
+        ],
+        "error_msg": null,
+        "backend": "openvino"
+      }
+    },
+    {
+      "image": "WIN_20250905_11_49_20_Pro.jpg",
+      "gt_count": -1,
+      "current": null,
+      "new": {
+        "pred_count": 64,
+        "abs_error": NaN,
+        "rel_error_%": NaN,
+        "lat_mean_ms": 110.64271999930497,
+        "lat_p50_ms": 110.13000000093598,
+        "lat_p95_ms": 124.11473999964073,
+        "latencies": [
+          110.93809999874793,
+          98.62439999778871,
+          110.13000000093598,
+          127.40889999986393,
+          106.1121999991883
+        ],
+        "error_msg": null,
+        "backend": "openvino"
+      }
+    }
+  ]
+}

@@ -1,19 +1,16 @@
-#!/usr/bin/env python3
 """
 current_system_adapter.py
-==========================
-Benchmark adapter for the EXISTING OpenCFU-based colony detection pipeline.
 
-Calls the production system EXACTLY as server.js does — via HTTP POST to the
-running /detect endpoint. Falls back to direct subprocess invocation of the
-colonyDetector.js flow if the server is not running.
+Adapter for the existing OpenCFU-based colony detection pipeline.
+Calls the production system EXACTLY as server.js's /detect route does —
+no modifications to the underlying system.
+
+Two execution modes (tried in order):
+  1. HTTP POST to http://localhost:3000/detect  (requires the Express server to be running)
+  2. Direct Node.js subprocess: spawns a minimal wrapper that calls ColonyDetector
 
 Returns:
-    {
-        "count": int,
-        "colonies": list[dict],   # per-colony data if available
-        "latency_ms": float,
-    }
+    {"count": int, "latency_ms": float, "raw_response": dict, "error": str | None}
 """
 
 import json
@@ -22,147 +19,152 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional
-
-# ── Paths ──────────────────────────────────────────────────────────────────────
-BENCHMARK_DIR = Path(__file__).resolve().parent
-NEW_SYSTEM_ROOT = BENCHMARK_DIR.parent
-REPO_ROOT = NEW_SYSTEM_ROOT.parent   # d:/work/cell/
-
-SERVER_URL = "http://localhost:3000"
-DETECT_ENDPOINT = f"{SERVER_URL}/detect"
-
-# ──────────────────────────────────────────────────────────────────────────────
 
 
-def _run_via_http(image_path: Path) -> dict:
-    """
-    Call the existing /detect HTTP endpoint.
-    The server must already be running (node server.js).
-    """
-    try:
-        import requests
-    except ImportError:
-        raise RuntimeError("pip install requests")
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 
+SERVER_URL     = "http://localhost:3000/detect"
+SERVER_TIMEOUT = 60       # seconds
+REPO_ROOT      = Path(__file__).parent.parent.parent   # d:/work/cell
+
+
+# ---------------------------------------------------------------------------
+# Mode 1: HTTP
+# ---------------------------------------------------------------------------
+
+def _detect_via_http(image_path: str) -> dict:
+    import urllib.request
+    import urllib.parse
+
+    image_path = str(Path(image_path).resolve())
+    payload = json.dumps({"imagePath": image_path}).encode()
+    req = urllib.request.Request(
+        SERVER_URL,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
     t0 = time.perf_counter()
-    with open(image_path, "rb") as f:
-        resp = requests.post(
-            DETECT_ENDPOINT,
-            files={"image": (image_path.name, f, "image/jpeg")},
-            timeout=120,
-        )
-    latency_ms = (time.perf_counter() - t0) * 1000
-
-    resp.raise_for_status()
-    data = resp.json()
-
-    if not data.get("success"):
-        raise RuntimeError(f"Server returned error: {data.get('error', data)}")
-
-    return {
-        "count": data.get("colonyCount", 0),
-        "colonies": data.get("colonies", []),
-        "latency_ms": latency_ms,
-    }
+    with urllib.request.urlopen(req, timeout=SERVER_TIMEOUT) as resp:
+        body = json.loads(resp.read().decode())
+    latency_ms = (time.perf_counter() - t0) * 1000.0
+    return body, latency_ms
 
 
-def _server_is_running() -> bool:
+def _server_is_up() -> bool:
+    import urllib.request
     try:
-        import requests
-        r = requests.get(f"{SERVER_URL}/health", timeout=3)
-        return r.status_code == 200
+        urllib.request.urlopen("http://localhost:3000/health", timeout=3)
+        return True
     except Exception:
         return False
 
 
-def _run_via_nodejs_subprocess(image_path: Path) -> dict:
-    """
-    Direct fallback: run a small Node.js inline script that instantiates
-    ColonyDetector and runs detectColonies, then prints JSON to stdout.
-    Mirrors what server.js does in the /detect handler.
-    """
-    js_code = f"""
-const ColonyDetector = require({json.dumps(str(REPO_ROOT / 'colonyDetector.js').replace(os.sep, '/'))});
+# ---------------------------------------------------------------------------
+# Mode 2: Direct Node.js subprocess
+# ---------------------------------------------------------------------------
+
+_NODE_WRAPPER = """
+const ColonyDetector = require('./colonyDetector');
 const path = require('path');
-
-(async () => {{
-    const detector = new ColonyDetector();
-    const imagePath = {json.dumps(str(image_path).replace(os.sep, '/'))};
-    const params = {{
-        threshold_type: 'regular',
-        threshold_value: 15,
-        min_radius: 3,
-        max_radius: 50,
-        enable_color_grouping: false,
-        coarseness: 10.0,
-        neighbours: 10
-    }};
-    const t0 = Date.now();
-    const result = await detector.detectColonies(imagePath, params);
-    const latency_ms = Date.now() - t0;
-    console.log(JSON.stringify({{ ...result, latency_ms }}));
-}})();
+const detector = new ColonyDetector();
+const imagePath = process.argv[2];
+detector.detectColonies(imagePath, {})
+  .then(result => {
+    process.stdout.write(JSON.stringify(result));
+    process.exit(0);
+  })
+  .catch(err => {
+    process.stdout.write(JSON.stringify({success: false, error: String(err)}));
+    process.exit(1);
+  });
 """
+
+
+def _detect_via_node(image_path: str) -> dict:
+    image_path = str(Path(image_path).resolve())
     t0 = time.perf_counter()
-
-    # Check if node is available
-    try:
-        node_result = subprocess.run(
-            ["node", "-e", js_code],
-            cwd=str(REPO_ROOT),
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        latency_ms = (time.perf_counter() - t0) * 1000
-    except FileNotFoundError:
-        raise RuntimeError("node not found on PATH. Install Node.js or start server.js.")
-
-    if node_result.returncode != 0:
+    result = subprocess.run(
+        ["node", "-e", _NODE_WRAPPER, image_path],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+        timeout=120,
+    )
+    latency_ms = (time.perf_counter() - t0) * 1000.0
+    stdout = result.stdout.strip()
+    if not stdout:
         raise RuntimeError(
-            f"Node.js subprocess failed:\n{node_result.stderr[-500:]}"
+            f"Node process returned no output (exit {result.returncode}). "
+            f"stderr: {result.stderr[:300]}"
         )
+    body = json.loads(stdout)
+    return body, latency_ms
 
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def run(image_path: str) -> dict:
+    """
+    Detect colonies in image_path using the current (OpenCFU) system.
+    Tries HTTP first; falls back to direct Node.js subprocess.
+
+    Returns:
+        {
+            "count":       int,      # detected colony count
+            "latency_ms":  float,    # wall-clock time including preprocessing
+            "raw_response": dict,    # full JSON response from the system
+            "error":       str|None, # non-None if detection failed
+            "mode":        str,      # "http" | "node"
+        }
+    """
+    if _server_is_up():
+        try:
+            body, latency_ms = _detect_via_http(image_path)
+            count = body.get("colonyCount", body.get("count", -1))
+            return {
+                "count":        int(count) if count is not None else -1,
+                "latency_ms":   latency_ms,
+                "raw_response": body,
+                "error":        None if body.get("success", True) else body.get("error"),
+                "mode":         "http",
+            }
+        except Exception as exc:
+            # Fall through to node mode
+            pass
+
+    # Node subprocess fallback
     try:
-        data = json.loads(node_result.stdout.strip())
-    except json.JSONDecodeError as e:
-        raise RuntimeError(
-            f"Failed to parse node output: {e}\nOutput: {node_result.stdout[:500]}"
-        )
-
-    if not data.get("success"):
-        raise RuntimeError(f"ColonyDetector returned error: {data.get('error', data)}")
-
-    # Use the subprocess wall-clock time as latency if not embedded in result
-    lat = data.pop("latency_ms", latency_ms)
-    return {
-        "count": data.get("colonyCount", 0),
-        "colonies": data.get("colonies", []),
-        "latency_ms": lat,
-    }
-
-
-def run(image_path: Path) -> dict:
-    """
-    Run the current (OpenCFU-based) system on image_path.
-    Tries HTTP endpoint first; falls back to direct Node.js subprocess.
-    """
-    image_path = Path(image_path)
-    if not image_path.exists():
-        raise FileNotFoundError(f"Image not found: {image_path}")
-
-    if _server_is_running():
-        return _run_via_http(image_path)
-    else:
-        return _run_via_nodejs_subprocess(image_path)
+        body, latency_ms = _detect_via_node(image_path)
+        count = body.get("colonyCount", body.get("count", -1))
+        return {
+            "count":        int(count) if count is not None else -1,
+            "latency_ms":   latency_ms,
+            "raw_response": body,
+            "error":        None if body.get("success", True) else body.get("error"),
+            "mode":         "node",
+        }
+    except Exception as exc:
+        return {
+            "count":        -1,
+            "latency_ms":   float("nan"),
+            "raw_response": {},
+            "error":        str(exc),
+            "mode":         "node",
+        }
 
 
-# ── CLI test entry point ───────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Quick test
+# ---------------------------------------------------------------------------
+
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("image", help="Path to test image")
-    args = parser.parse_args()
-    result = run(Path(args.image))
+    if len(sys.argv) < 2:
+        print("Usage: python current_system_adapter.py <image_path>")
+        sys.exit(1)
+    result = run(sys.argv[1])
     print(json.dumps(result, indent=2))

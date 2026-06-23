@@ -1,3 +1,27 @@
-new_system/data/
-new_system/runs/
-new_system/weights/
+# Datasets — never commit raw or processed data (relative to new_system/)
+data/*
+# Keep the attribution/license file committed
+!data/LICENSES.md
+
+# Training runs — logs, checkpoints, plots
+runs/
+
+# Model weights — .pt, .onnx, .xml, .bin
+weights/
+*.pt
+*.onnx
+*.xml
+*.bin
+
+# Colab session notebook
+runs/colab_session_log.ipynb
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# OS
+.DS_Store
+Thumbs.db
